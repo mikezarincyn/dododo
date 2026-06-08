@@ -1,0 +1,53 @@
+/* ============================================================
+   DODODO — TYPOGRAPHY TOKENS
+   Headings: Poppins 700. Body + UI: Inter. Buttons: Inter 700 caps.
+   Two-tone heading trick: base weight 400, emphasised <span> 700.
+   ============================================================ */
+
+:root {
+  /* ---- Families ---- */
+  --font-heading: 'Poppins', system-ui, -apple-system, sans-serif;
+  --font-body:    'Inter', system-ui, -apple-system, sans-serif;
+
+  /* ---- Weights ---- */
+  --weight-regular: 400;
+  --weight-medium:  500;
+  --weight-semibold:600;
+  --weight-bold:    700;
+
+  /* ---- Root size ---- */
+  --root-size: 24px;
+
+  /* ---- Type scale (desktop) ---- */
+  --font-h1: 80px;   /* line-height 1 */
+  --font-h2: 48px;   /* line-height 1.2 */
+  --font-h3: 32px;   /* line-height 1.33 */
+  --font-h4: 24px;
+  --font-big:   30px;
+  --font-body-lg: 22px;  /* line-height 1.5 */
+  --font-body:    18px;
+  --font-small: 17px;
+  --font-button: 17px;
+  --font-eyebrow: 17px;
+
+  /* ---- Line heights ---- */
+  --lh-tight:   1;     /* @kind other */
+  --lh-snug:    1.2;   /* @kind other */
+  --lh-heading: 1.33;  /* @kind other */
+  --lh-body:    1.5;   /* @kind other */
+
+  /* ---- Letter spacing ---- */
+  --ls-heading: 0.02em;
+  --ls-button:  0.05em;
+  --ls-eyebrow: 0.12em;
+}
+
+/* ---- Mobile downscale ---- */
+@media (max-width: 640px) {
+  :root {
+    --font-h1: 32px;
+    --font-h2: 32px;
+    --font-h3: 24px;
+    --font-body-lg: 18px;
+  }
+}

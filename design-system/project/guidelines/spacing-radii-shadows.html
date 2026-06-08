@@ -1,0 +1,22 @@
+<!-- @dsCard group="Spacing" viewport="700x170" name="Radii & shadows" subtitle="Everything rounded · soft tinted shadows" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); background: var(--grey-surface-100); padding: 28px; }
+  .row { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+  .box { width: 96px; height: 80px; background: var(--white); display:flex; align-items:flex-end; padding:8px; box-sizing:border-box; }
+  .n { font-size: 12px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div><div class="box" style="border-radius:var(--radius-md); box-shadow:var(--shadow-card)"><span class="n">16 · card</span></div></div>
+    <div><div class="box" style="border-radius:var(--radius-lg); box-shadow:var(--shadow-card)"><span class="n">24 · lg</span></div></div>
+    <div><div class="box" style="border-radius:var(--radius-xl); box-shadow:var(--shadow-float)"><span class="n">32 · float</span></div></div>
+    <div><div class="box" style="border-radius:var(--radius-pill); box-shadow:var(--shadow-pill); background:var(--green-500)"><span class="n" style="color:#fff">pill</span></div></div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# dododo — Streamlit theme.
+# Значения взяты из design-system/project/tokens/colors.css + typography.css.
+# НЕ менять руками без сверки с tokens/colors.css.
+#
+# Token mapping:
+#   primaryColor    → --green-500   (DS primary action / CTA)
+#   backgroundColor → --surface-page / --white
+#   textColor       → --ink-900     (DS body text)
+#   font            → "sans serif"  (Streamlit native; брендовые шрифты — через CSS-инъекцию в app.py)
+#
+# secondaryBackgroundColor (--green-100 #DCF3EA) НЕ ставится сознательно:
+# Streamlit раскрашивает им text_input/select/sidebar; на этих элементах
+# живёт панель покадровой разметки эталона, где специалист принимает
+# решения по контрасту. Цветной фон под ними бьёт по читаемости.
+# Подключим, когда (а) разметка пройдёт первую серию реальных клипов и
+# (б) проверим контраст на чек-листе разметчика. См. CLAUDE.md.
+
+[theme]
+primaryColor = "#72BCA1"
+backgroundColor = "#FFFFFF"
+textColor = "#2B2A2A"
+font = "sans serif"

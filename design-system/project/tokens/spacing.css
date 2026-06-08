@@ -1,0 +1,52 @@
+/* ============================================================
+   DODODO — SPACING, RADII, SHADOWS
+   Generous whitespace. Fully-rounded pills. Soft shadows.
+   Never sharp corners, never dense.
+   ============================================================ */
+
+:root {
+  /* ---- Spacing scale (4px base) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 40px;
+  --space-8: 56px;
+  --space-9: 72px;
+  --space-10: 100px;
+
+  /* ---- Section rhythm ---- */
+  --section-pad-y:      100px;  /* desktop vertical */
+  --section-pad-y-sm:   40px;   /* mobile vertical */
+  --section-pad-x:      50px;   /* desktop side */
+  --section-pad-x-sm:   16px;   /* mobile side */
+
+  /* ---- Radii ---- */
+  --radius-sm:   8px;
+  --radius-md:   16px;   /* small cards */
+  --radius-lg:   24px;   /* large cards */
+  --radius-xl:   32px;
+  --radius-pill: 9999px; /* buttons, chips */
+
+  /* ---- Button sizing ---- */
+  --btn-height:    72px;
+  --btn-height-sm: 54px;
+  --btn-pad-x:     40px;
+
+  /* ---- Shadows (soft, warm, never harsh) ---- */
+  --shadow-card:   0 8px 24px rgba(13, 50, 118, 0.08);
+  --shadow-float:  0 16px 40px rgba(13, 50, 118, 0.12);
+  --shadow-pill:   0 4px 14px rgba(114, 188, 161, 0.30);
+
+  /* ---- Borders ---- */
+  --border-width: 1.5px;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --section-pad-y: var(--section-pad-y-sm);
+    --section-pad-x: var(--section-pad-x-sm);
+  }
+}

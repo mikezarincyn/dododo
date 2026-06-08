@@ -1,0 +1,79 @@
+/* ============================================================
+   DODODO — COLOR TOKENS
+   Base palette (raw values) + semantic aliases.
+   Soft, warm, optimistic. Green = action, navy = trust,
+   pastel confetti = playfulness. Never clinical or cold.
+   ============================================================ */
+
+:root {
+  /* ---- Brand greens (primary action) ---- */
+  --green-500: #72BCA1;   /* primary brand / CTA */
+  --green-400: #89CCB3;   /* primary hover (lighter) */
+  --green-100: #DCF3EA;   /* soft pill button surface, e.g. "Start screening" */
+
+  /* ---- Secondary teal-blue ---- */
+  --teal-500: #58B4B7;    /* secondary button */
+  --teal-400: #6FC4C9;    /* secondary hover */
+
+  /* ---- Navy (headings / trust) ---- */
+  --navy-700: #0D3276;    /* headings, links, emphasis */
+
+  /* ---- Ink / neutrals ---- */
+  --ink-900: #2B2A2A;     /* near-black text */
+  --white:   #FFFFFF;
+
+  /* ---- Warm surfaces ---- */
+  --yellow-surface-100: #FFF8E4;  /* soft yellow surface */
+  --yellow-surface-200: #FFEFCC;  /* soft yellow hover */
+  --grey-surface-100:   #F4F5F6;  /* neutral "challenge" card surface */
+
+  /* ---- Confetti accents (from logo) ---- */
+  --confetti-yellow: #FFD983;   /* dot */
+  --confetti-pink:   #EFCFC9;   /* blush triangle */
+  --confetti-blue:   #D0EFFB;   /* light-blue triangle */
+
+  /* ---- Extended accents (from screenshots) ---- */
+  --coral-500: #EE6C4D;   /* "most popular" badge */
+  --blush-100: #F9D7DB;   /* testimonials section background */
+  --lilac-100: #ECEAFB;   /* step number chips / check bubbles */
+
+  /* ============================================================
+     SEMANTIC ALIASES
+     ============================================================ */
+
+  /* Text */
+  --text-heading:    var(--navy-700);
+  --text-body:       var(--ink-900);
+  --text-muted:      rgba(43, 42, 42, 0.65);   /* secondary text */
+  --text-subtle:     rgba(43, 42, 42, 0.50);   /* tertiary / captions */
+  --text-on-green:   var(--white);
+  --text-on-navy:    var(--white);
+  --text-link:       var(--navy-700);
+
+  /* Surfaces */
+  --surface-page:        var(--white);
+  --surface-card:        var(--white);
+  --surface-soft-green:  var(--green-100);
+  --surface-soft-yellow: var(--yellow-surface-100);
+  --surface-soft-grey:   var(--grey-surface-100);
+  --surface-blush:       var(--blush-100);
+  --surface-brand-green: var(--green-500);
+
+  /* Actions */
+  --action-primary:        var(--green-500);
+  --action-primary-hover:  var(--green-400);
+  --action-secondary:      var(--teal-500);
+  --action-secondary-hover:var(--teal-400);
+  --action-pill-soft:      var(--green-100);
+
+  /* Borders */
+  --border-subtle:  rgba(13, 50, 118, 0.10);   /* faint navy hairline on cards */
+  --border-strong:  var(--ink-900);            /* outlined pill buttons */
+  --border-green:   var(--green-500);
+
+  /* Status / progress (development bands) */
+  --status-typical:  var(--green-500);
+  --status-building: var(--teal-500);
+  --status-emerging: var(--confetti-yellow);
+  --status-watch:    var(--coral-500);
+}

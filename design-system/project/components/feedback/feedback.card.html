@@ -1,0 +1,44 @@
+<!-- @dsCard group="Components" viewport="700x320" name="Check items & progress" subtitle="Positive/problem lists + segmented development bars" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); background: var(--white); padding: 32px; }
+  .cols { display: grid; grid-template-columns: 1.1fr 1fr; gap: 36px; }
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+  .barwrap { display: flex; flex-direction: column; gap: 18px; }
+  .domain { font-family: var(--font-heading); font-size: 16px; color: var(--navy-700); margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel">
+  const { CheckItem, ProgressBar } = window.DododoDesignSystem_cdf388;
+  function Demo() {
+    return (
+      <div className="cols">
+        <div className="stack">
+          <CheckItem title="Know what's happening — right now">A 20-minute screening across 6 key areas.</CheckItem>
+          <CheckItem title="A plan you can trust">Built by UK-certified occupational therapists.</CheckItem>
+          <CheckItem kind="cross" title="Frequent meltdowns" />
+          <CheckItem kind="cross" title="Too many conflicting opinions" />
+        </div>
+        <div className="barwrap">
+          <div><div className="domain">Emotional Regulation</div><ProgressBar filled={4} segments={6} status="typical" label="Typical for age" /></div>
+          <div><div className="domain">Joint Attention</div><ProgressBar filled={3} segments={6} status="building" label="Building" /></div>
+          <div><div className="domain">Sensory Processing</div><ProgressBar filled={2} segments={6} status="emerging" label="Emerging" /></div>
+          <div><div className="domain">Motor Skills</div><ProgressBar filled={1} segments={6} status="watch" label="Worth a look" /></div>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+<!-- @dsCard group="Colors" viewport="700x140" name="Text colours" subtitle="Navy headings, ink body, opacity for muted text" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); background: var(--white); padding: 24px; }
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+  .line { font-size: 22px; line-height: 1.2; }
+  .tag { font-size: 13px; color: var(--text-subtle); font-family: var(--font-body); }
+</style>
+</head>
+<body>
+  <div class="stack">
+    <div class="line" style="color:var(--text-heading); font-family:var(--font-heading); font-weight:700;">Heading — navy 700 <span class="tag">#0D3276</span></div>
+    <div class="line" style="color:var(--text-body);">Body — ink 900 <span class="tag">#2B2A2A</span></div>
+    <div class="line" style="color:var(--text-muted);">Muted — ink @ 65% <span class="tag">rgba(43,42,42,.65)</span></div>
+    <div class="line" style="color:var(--text-subtle);">Subtle — ink @ 50% <span class="tag">rgba(43,42,42,.50)</span></div>
+  </div>
+</body>
+</html>

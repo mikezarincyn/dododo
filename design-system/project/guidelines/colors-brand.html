@@ -1,0 +1,25 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Brand colours" subtitle="Green = action · Navy = trust · Teal = secondary" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); background: var(--white); padding: 24px; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .sw { flex: 1; min-width: 120px; }
+  .chip { height: 76px; border-radius: var(--radius-md); box-shadow: var(--shadow-card); }
+  .name { font-weight: 700; font-size: 14px; color: var(--ink-900); margin-top: 10px; }
+  .hex  { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:var(--green-500)"></div><div class="name">Green 500</div><div class="hex">#72BCA1 · primary</div></div>
+    <div class="sw"><div class="chip" style="background:var(--green-400)"></div><div class="name">Green 400</div><div class="hex">#89CCB3 · hover</div></div>
+    <div class="sw"><div class="chip" style="background:var(--teal-500)"></div><div class="name">Teal 500</div><div class="hex">#58B4B7 · secondary</div></div>
+    <div class="sw"><div class="chip" style="background:var(--navy-700)"></div><div class="name">Navy 700</div><div class="hex">#0D3276 · headings</div></div>
+    <div class="sw"><div class="chip" style="background:var(--ink-900)"></div><div class="name">Ink 900</div><div class="hex">#2B2A2A · body</div></div>
+  </div>
+</body>
+</html>

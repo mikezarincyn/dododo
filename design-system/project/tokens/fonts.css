@@ -1,0 +1,4 @@
+/* Dododo webfonts — Poppins (headings) + Inter (body/UI).
+   Loaded from Google Fonts CDN. If self-hosting is needed later,
+   swap these @import lines for local @font-face rules + .woff2 files. */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');

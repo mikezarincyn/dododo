@@ -1,0 +1,316 @@
+{
+  "plugins": [
+    "react",
+    "import"
+  ],
+  "rules": {
+    "react/forbid-elements": [
+      "warn",
+      {
+        "forbid": []
+      }
+    ],
+    "no-restricted-imports": [
+      "warn",
+      {
+        "patterns": [
+          {
+            "group": [
+              "components/actions/**",
+              "components/brand/**",
+              "components/feedback/**",
+              "components/forms/**",
+              "components/surfaces/**",
+              "ui_kits/app/**",
+              "ui_kits/website/**"
+            ],
+            "message": "Import design-system components from 'index.js', not component internals."
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "warn",
+      {
+        "selector": "Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",
+        "message": "Raw hex color — use a design-system color token via var()."
+      },
+      {
+        "selector": "Literal[value=/\\b\\d+px\\b/]",
+        "message": "Raw px value — use a design-system spacing token via var()."
+      },
+      {
+        "selector": "Literal[value=/font-family\\s*:\\s*(?!['\\\"]?(?:Poppins|Inter))/i]",
+        "message": "Font not provided by the design system. Available: Poppins, Inter."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Badge'] > JSXAttribute > JSXIdentifier[name!=/^(?:children|tone|style|key|ref|className|style|children)$/]",
+        "message": "<Badge> doesn't accept that prop. Declared props: children, tone, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Badge'] > JSXAttribute[name.name='tone'] > Literal[value!=/^(?:coral|green|yellow|lilac|navy)$/]",
+        "message": "<Badge> tone must be one of 'coral' | 'green' | 'yellow' | 'lilac' | 'navy'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Button'] > JSXAttribute > JSXIdentifier[name!=/^(?:children|variant|size|uppercase|iconRight|disabled|onClick|style|key|ref|className|style|children)$/]",
+        "message": "<Button> doesn't accept that prop. Declared props: children, variant, size, uppercase, iconRight, disabled, onClick, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Button'] > JSXAttribute[name.name='variant'] > Literal[value!=/^(?:primary|secondary|outline|soft)$/]",
+        "message": "<Button> variant must be one of 'primary' | 'secondary' | 'outline' | 'soft'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Button'] > JSXAttribute[name.name='size'] > Literal[value!=/^(?:lg|sm)$/]",
+        "message": "<Button> size must be one of 'lg' | 'sm'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Card'] > JSXAttribute > JSXIdentifier[name!=/^(?:children|tone|padding|style|key|ref|className|style|children)$/]",
+        "message": "<Card> doesn't accept that prop. Declared props: children, tone, padding, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Card'] > JSXAttribute[name.name='tone'] > Literal[value!=/^(?:white|mint|grey|yellow)$/]",
+        "message": "<Card> tone must be one of 'white' | 'mint' | 'grey' | 'yellow'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='CheckItem'] > JSXAttribute > JSXIdentifier[name!=/^(?:title|children|kind|style|key|ref|className|style|children)$/]",
+        "message": "<CheckItem> doesn't accept that prop. Declared props: title, children, kind, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='CheckItem'] > JSXAttribute[name.name='kind'] > Literal[value!=/^(?:check|cross)$/]",
+        "message": "<CheckItem> kind must be one of 'check' | 'cross'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Input'] > JSXAttribute > JSXIdentifier[name!=/^(?:label|hint|type|value|placeholder|onChange|style|key|ref|className|style|children)$/]",
+        "message": "<Input> doesn't accept that prop. Declared props: label, hint, type, value, placeholder, onChange, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Logo'] > JSXAttribute > JSXIdentifier[name!=/^(?:height|assetBase|style|key|ref|className|style|children)$/]",
+        "message": "<Logo> doesn't accept that prop. Declared props: height, assetBase, style."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/index.js"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ],
+  "x-omelette": {
+    "components": {
+      "Badge": {
+        "replaces": []
+      },
+      "Button": {
+        "replaces": []
+      },
+      "Card": {
+        "replaces": []
+      },
+      "CheckItem": {
+        "replaces": []
+      },
+      "Input": {
+        "replaces": []
+      },
+      "Logo": {
+        "replaces": []
+      }
+    },
+    "tokens": [
+      "--action-pill-soft",
+      "--action-primary",
+      "--action-primary-hover",
+      "--action-secondary",
+      "--action-secondary-hover",
+      "--blush-100",
+      "--border-green",
+      "--border-strong",
+      "--border-subtle",
+      "--border-width",
+      "--btn-height",
+      "--btn-height-sm",
+      "--btn-pad-x",
+      "--confetti-blue",
+      "--confetti-pink",
+      "--confetti-yellow",
+      "--coral-500",
+      "--font-big",
+      "--font-body",
+      "--font-body-lg",
+      "--font-button",
+      "--font-eyebrow",
+      "--font-h1",
+      "--font-h2",
+      "--font-h3",
+      "--font-h4",
+      "--font-heading",
+      "--font-small",
+      "--green-100",
+      "--green-400",
+      "--green-500",
+      "--grey-surface-100",
+      "--ink-900",
+      "--lh-body",
+      "--lh-heading",
+      "--lh-snug",
+      "--lh-tight",
+      "--lilac-100",
+      "--ls-button",
+      "--ls-eyebrow",
+      "--ls-heading",
+      "--navy-700",
+      "--radius-lg",
+      "--radius-md",
+      "--radius-pill",
+      "--radius-sm",
+      "--radius-xl",
+      "--root-size",
+      "--section-pad-x",
+      "--section-pad-x-sm",
+      "--section-pad-y",
+      "--section-pad-y-sm",
+      "--shadow-card",
+      "--shadow-float",
+      "--shadow-pill",
+      "--space-1",
+      "--space-10",
+      "--space-2",
+      "--space-3",
+      "--space-4",
+      "--space-5",
+      "--space-6",
+      "--space-7",
+      "--space-8",
+      "--space-9",
+      "--status-building",
+      "--status-emerging",
+      "--status-typical",
+      "--status-watch",
+      "--surface-blush",
+      "--surface-brand-green",
+      "--surface-card",
+      "--surface-page",
+      "--surface-soft-green",
+      "--surface-soft-grey",
+      "--surface-soft-yellow",
+      "--teal-400",
+      "--teal-500",
+      "--text-body",
+      "--text-heading",
+      "--text-link",
+      "--text-muted",
+      "--text-on-green",
+      "--text-on-navy",
+      "--text-subtle",
+      "--weight-bold",
+      "--weight-medium",
+      "--weight-regular",
+      "--weight-semibold",
+      "--white",
+      "--yellow-surface-100",
+      "--yellow-surface-200"
+    ],
+    "tokenKinds": {
+      "--green-500": "color",
+      "--green-400": "color",
+      "--green-100": "color",
+      "--teal-500": "color",
+      "--teal-400": "color",
+      "--navy-700": "color",
+      "--ink-900": "color",
+      "--white": "color",
+      "--yellow-surface-100": "color",
+      "--yellow-surface-200": "color",
+      "--grey-surface-100": "color",
+      "--confetti-yellow": "color",
+      "--confetti-pink": "color",
+      "--confetti-blue": "color",
+      "--coral-500": "color",
+      "--blush-100": "color",
+      "--lilac-100": "color",
+      "--text-heading": "font",
+      "--text-body": "font",
+      "--text-muted": "font",
+      "--text-subtle": "font",
+      "--text-on-green": "font",
+      "--text-on-navy": "font",
+      "--text-link": "font",
+      "--surface-page": "color",
+      "--surface-card": "color",
+      "--surface-soft-green": "color",
+      "--surface-soft-yellow": "color",
+      "--surface-soft-grey": "color",
+      "--surface-blush": "color",
+      "--surface-brand-green": "color",
+      "--action-primary": "color",
+      "--action-primary-hover": "color",
+      "--action-secondary": "color",
+      "--action-secondary-hover": "color",
+      "--action-pill-soft": "color",
+      "--border-subtle": "color",
+      "--border-strong": "color",
+      "--border-green": "color",
+      "--status-typical": "color",
+      "--status-building": "color",
+      "--status-emerging": "color",
+      "--status-watch": "color",
+      "--font-heading": "font",
+      "--font-body": "font",
+      "--weight-regular": "font",
+      "--weight-medium": "font",
+      "--weight-semibold": "font",
+      "--weight-bold": "font",
+      "--root-size": "spacing",
+      "--font-h1": "font",
+      "--font-h2": "font",
+      "--font-h3": "font",
+      "--font-h4": "font",
+      "--font-big": "font",
+      "--font-body-lg": "font",
+      "--font-small": "font",
+      "--font-button": "font",
+      "--font-eyebrow": "font",
+      "--lh-tight": "other",
+      "--lh-snug": "other",
+      "--lh-heading": "other",
+      "--lh-body": "other",
+      "--ls-heading": "spacing",
+      "--ls-button": "spacing",
+      "--ls-eyebrow": "spacing",
+      "--space-1": "spacing",
+      "--space-2": "spacing",
+      "--space-3": "spacing",
+      "--space-4": "spacing",
+      "--space-5": "spacing",
+      "--space-6": "spacing",
+      "--space-7": "spacing",
+      "--space-8": "spacing",
+      "--space-9": "spacing",
+      "--space-10": "spacing",
+      "--section-pad-y": "spacing",
+      "--section-pad-y-sm": "spacing",
+      "--section-pad-x": "spacing",
+      "--section-pad-x-sm": "spacing",
+      "--radius-sm": "radius",
+      "--radius-md": "radius",
+      "--radius-lg": "radius",
+      "--radius-xl": "radius",
+      "--radius-pill": "radius",
+      "--btn-height": "spacing",
+      "--btn-height-sm": "spacing",
+      "--btn-pad-x": "spacing",
+      "--shadow-card": "shadow",
+      "--shadow-float": "shadow",
+      "--shadow-pill": "shadow",
+      "--border-width": "spacing"
+    },
+    "fontFamilies": [
+      "Inter",
+      "Poppins"
+    ]
+  }
+}

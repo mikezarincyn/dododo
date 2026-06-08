@@ -1,0 +1,25 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Surfaces" subtitle="White cards on soft tinted section backgrounds" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); background: var(--white); padding: 24px; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .sw { flex: 1; min-width: 110px; }
+  .chip { height: 76px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); }
+  .name { font-weight: 700; font-size: 14px; color: var(--ink-900); margin-top: 10px; }
+  .hex  { font-size: 13px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:var(--green-100)"></div><div class="name">Soft green</div><div class="hex">#DCF3EA</div></div>
+    <div class="sw"><div class="chip" style="background:var(--yellow-surface-100)"></div><div class="name">Soft yellow</div><div class="hex">#FFF8E4</div></div>
+    <div class="sw"><div class="chip" style="background:var(--grey-surface-100)"></div><div class="name">Neutral</div><div class="hex">#F4F5F6</div></div>
+    <div class="sw"><div class="chip" style="background:var(--lilac-100)"></div><div class="name">Lilac</div><div class="hex">#ECEAFB</div></div>
+    <div class="sw"><div class="chip" style="background:var(--white)"></div><div class="name">White card</div><div class="hex">#FFFFFF</div></div>
+  </div>
+</body>
+</html>

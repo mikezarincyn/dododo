@@ -1,0 +1,50 @@
+# dododo — .gitignore
+# PII и большие/чувствительные артефакты ни при каких условиях в git.
+
+# Данные детей и производные
+data/
+
+# Виртуальное окружение
+venv/
+
+# MediaPipe модели (бинарники, не код)
+*.task
+
+# Python артефакты
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS системный мусор
+.DS_Store
+
+# Видео/аудио в корне (orphan-исходники, тестовые клипы)
+*.mp4
+*.mov
+*.MOV
+*.avi
+*.mkv
+*.wav
+
+# Streamlit секреты (если когда-нибудь появятся)
+.streamlit/secrets.toml
+
+# Системный temp (на всякий — если кто-то симлинком прокинет)
+/tmp/
+
+# Бэкапы из аудит-задач
+*backup*.zip
+
+# Корневые реликты раннего прототипа — содержат PII (имя файла-источника)
+# в hardcoded константах и в meta.json:input_file. Заменены продакшен-кодом
+# в engine.py / app.py; на диске оставлены для справки, но в git-историю
+# их пускать нельзя.
+/meta.json
+/landmarks.csv
+/audio_peaks.png
+/head_turn.png
+/latency.png
+/skeleton_test.py
+/audio_peaks.py
+/head_turn.py
+/latency.py
