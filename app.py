@@ -774,9 +774,13 @@ if st.session_state["dododo_mode"] == "Покадровая разметка":
 
 # ---------- Утилиты ----------
 
-def _safe_stem(name):
-    stem = Path(name).stem
-    return "".join(c if c.isalnum() or c in "-_" else "_" for c in stem) or "video"
+def _clamp_video_suffix(filename):
+    """Клампит расширение по whitelist (BUG-02). «video.mp4.exe» → .mp4."""
+    from config import ALLOWED_VIDEO_SUFFIXES
+    suffix = Path(filename).suffix.lower()
+    if suffix not in ALLOWED_VIDEO_SUFFIXES:
+        suffix = ".mp4"
+    return suffix
 
 
 def _reset_video_state():
@@ -826,28 +830,33 @@ if selected_id != current_id:
     st.session_state.pop("dododo_saved_session_dir", None)
 
 def _create_child_cb():
-    """Колбэк кнопки «Создать». Модификация ключей виджетов разрешена внутри колбэков —
-    он выполняется до отрисовки виджетов на следующем прогоне."""
-    code = st.session_state.get("dododo_new_child_code", "")
+    """Колбэк кнопки «Создать». display_code генерируется автоматически — свободный
+    ввод человеком убран, чтобы реальное имя ребёнка нельзя было ввести руками."""
     try:
-        new_id = storage.create_child(code)
-    except ValueError as e:
+        new_id, new_code = storage.create_child()
+    except Exception as e:
         st.session_state["dododo_create_child_error"] = str(e)
         return
     st.session_state["dododo_create_child_error"] = ""
-    # Сразу делаем созданного ребёнка выбранным
     st.session_state["dododo_child_id"] = new_id
-    # Очищаем поле ввода (тоже ключ виджета, но мы внутри колбэка — это разрешено)
-    st.session_state["dododo_new_child_code"] = ""
+    st.session_state["dododo_just_created_code"] = new_code
     st.session_state.pop("dododo_saved_session_dir", None)
 
 
 with st.expander("Создать нового"):
-    st.text_input("Псевдоним / код (не имя)", key="dododo_new_child_code")
+    st.caption(
+        "Псевдоним генерируется автоматически в формате **CH-XXXXXX**. "
+        "Свободный ввод имени намеренно недоступен — это часть защиты от попадания "
+        "реального имени ребёнка в систему (псевдонимизация GDPR)."
+    )
     st.button("Создать", key="dododo_create_child_btn", on_click=_create_child_cb)
     err = st.session_state.get("dododo_create_child_error", "")
     if err:
         st.error(err)
+    _just_code = st.session_state.get("dododo_just_created_code")
+    if _just_code:
+        st.success(f"Создан псевдоним: **{_just_code}**")
+        st.session_state.pop("dododo_just_created_code", None)
 
 if st.session_state.get("dododo_child_id"):
     child = storage.read_child(st.session_state["dododo_child_id"])
@@ -897,17 +906,26 @@ if uploaded is not None:
 
 if uploaded is not None and "dododo_result" not in st.session_state:
     if st.button("Обработать"):
-        stamp = int(time.time())
-        stem = f"{_safe_stem(uploaded.name)}_{stamp}"
-        suffix = Path(uploaded.name).suffix or ".mp4"
+        # Рабочие файлы — в эфемерном WORK_DIR_ROOT/<work_id>/, НЕ в DATA_DIR.
+        # work_id ≠ session_id: session_id создаётся storage только при сохранении.
+        # Имена внутри work-папки — generic, без оригинального имени пользователя.
+        import uuid as _uuid
+        from config import WORK_DIR_ROOT
+        work_id = _uuid.uuid4().hex
+        work_dir = WORK_DIR_ROOT / work_id
+        work_dir.mkdir(parents=True, exist_ok=True)
 
-        input_path = DATA_DIR / f"{stem}_input{suffix}"
-        output_path = DATA_DIR / f"{stem}_skeleton.mp4"
-        csv_path = DATA_DIR / f"{stem}_landmarks.csv"
-        meta_path = DATA_DIR / f"{stem}_meta.json"
+        suffix = _clamp_video_suffix(uploaded.name)
+        input_path = work_dir / f"input{suffix}"
+        output_path = work_dir / "skeleton.mp4"
+        csv_path = work_dir / "landmarks.csv"
+        meta_path = work_dir / "meta.json"
 
         with open(input_path, "wb") as f:
             f.write(uploaded.getbuffer())
+
+        # work_id и input_path кладём в state — нужны при сохранении сессии.
+        st.session_state["dododo_work_id"] = work_id
 
         progress = st.progress(0.0, text="Обработка видео…")
 
@@ -1217,6 +1235,7 @@ if "dododo_result" in st.session_state:
                         video_src=result["video_path"],
                         csv_src=result["csv_path"],
                         meta_src=result["meta_path"],
+                        input_src=st.session_state.get("dododo_input_path"),
                     )
 
                     checklist = {
@@ -1463,6 +1482,7 @@ if "dododo_result" in st.session_state:
                         video_src=result["video_path"],
                         csv_src=result["csv_path"],
                         meta_src=result["meta_path"],
+                        input_src=st.session_state.get("dododo_input_path"),
                     )
 
                     checklist = {

@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import json
 import math
 import shutil
@@ -353,8 +354,21 @@ def process_video(input_path, output_path, csv_path, meta_path, progress_callbac
 
     overall_activity = round(activity_sum / activity_count, 5) if activity_count else 0.0
 
+    # Провенанс источника БЕЗ имени файла (IMP-04 + SEC-01):
+    # имя файла, поданное пользователем, может быть PII (содержать имя/фамилию).
+    # Вместо него — sha256 содержимого + расширение + размер.
+    _src_size = input_path.stat().st_size
+    _hasher = hashlib.sha256()
+    with open(input_path, "rb") as _src_f:
+        for _chunk in iter(lambda: _src_f.read(65536), b""):
+            _hasher.update(_chunk)
+    _src_sha256 = _hasher.hexdigest()
+    _src_ext = input_path.suffix.lower()
+
     meta = {
-        "input_file": input_path.name,
+        "source_sha256": _src_sha256,
+        "original_ext": _src_ext,
+        "size_bytes": _src_size,
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "fps": round(fps, 2),
         "width": width,

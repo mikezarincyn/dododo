@@ -4,14 +4,20 @@
 файлов можно потом заменить на базу данных, не трогая app.py/engine.py.
 """
 
+import base64
 import json
+import re
+import secrets
 import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
 
 from config import (
+    ALLOWED_VIDEO_SUFFIXES,
     CHILDREN_DIR,
+    DISPLAY_CODE_PATTERN,
+    DISPLAY_CODE_PREFIX,
     FRAME_CACHE_ROOT,
     ONSET_ANNOTATIONS_FILENAME,
     ONSET_SCHEMA_VERSION,
@@ -41,16 +47,13 @@ def _prefix(child_id, session_id):
 
 
 def _resolve_session_file(child_id, session_id, suffix):
-    """Вернуть путь к файлу записи: сначала ищем префиксованное имя, потом старое без префикса.
+    """Вернуть путь к префиксованному файлу записи.
 
-    suffix — это «хвост» имени, например «video.mp4», «landmarks.csv», «meta.json», «assessment.json».
+    suffix — «хвост» имени: «video.mp4», «landmarks.csv», «meta.json», «assessment.json».
+    Legacy-fallback на без-префиксное имя удалён в Фазе 1 (данные стёрты).
     """
     sd = _session_dir(child_id, session_id)
-    new_path = sd / f"{_prefix(child_id, session_id)}{suffix}"
-    if new_path.exists():
-        return new_path
-    legacy = sd / suffix
-    return legacy
+    return sd / f"{_prefix(child_id, session_id)}{suffix}"
 
 
 def _now():
@@ -70,11 +73,45 @@ def _read_json(path):
 
 # ---------- Дети ----------
 
-def create_child(display_code):
-    """Создать ребёнка с псевдонимом display_code. Возвращает child_id."""
-    display_code = (display_code or "").strip()
-    if not display_code:
-        raise ValueError("display_code пустой")
+_DISPLAY_CODE_RE = re.compile(rf"^{DISPLAY_CODE_PATTERN}$")
+
+
+def _generate_display_code():
+    """Сгенерировать псевдоним вида CH-XXXXXX (base32-32бит, без 0/1/8/9).
+    Физически не может быть человеческим именем — фиксированный префикс CH-
+    + 6 base32-символов."""
+    # 5 байтов даёт 8 base32-символов; обрезаем до 6 (=30 бит энтропии)
+    raw = secrets.token_bytes(5)
+    code = base64.b32encode(raw).decode("ascii").rstrip("=")[:6].upper()
+    return f"{DISPLAY_CODE_PREFIX}{code}"
+
+
+def is_valid_display_code(code):
+    """Валидация формата: только сгенерированные значения принимаются."""
+    return bool(code) and bool(_DISPLAY_CODE_RE.match(code))
+
+
+def create_child():
+    """Создать ребёнка с авто-сгенерированным display_code (CH-XXXXXX).
+
+    Свободный ввод человеком в эту функцию НЕ принимается — это сделано
+    специально, чтобы реальное имя ребёнка нельзя было ввести руками
+    (принцип псевдонимизации, GDPR-чувствительная категория).
+
+    Возвращает: (child_id, display_code).
+    """
+    # Защита от очень редкой коллизии: повторяем до 10 раз
+    existing = {c.get("display_code") for c in list_children()}
+    for _ in range(10):
+        display_code = _generate_display_code()
+        if display_code not in existing:
+            break
+    else:
+        raise RuntimeError("не удалось сгенерировать уникальный display_code за 10 попыток")
+
+    # Defense-in-depth: даже у внутреннего генератора валидируем формат
+    if not is_valid_display_code(display_code):
+        raise RuntimeError(f"внутренняя ошибка: сгенерирован невалидный display_code: {display_code!r}")
 
     child_id = uuid.uuid4().hex
     child = {
@@ -85,7 +122,7 @@ def create_child(display_code):
     _child_dir(child_id).mkdir(parents=True, exist_ok=True)
     _sessions_dir(child_id).mkdir(parents=True, exist_ok=True)
     _write_json(_child_file(child_id), child)
-    return child_id
+    return child_id, display_code
 
 
 def list_children():
@@ -122,12 +159,15 @@ def create_session(child_id):
     return session_id
 
 
-def save_session_files(child_id, session_id, video_src, csv_src, meta_src):
-    """Скопировать видео, landmarks.csv и meta.json в папку записи.
+def save_session_files(child_id, session_id, video_src, csv_src, meta_src, input_src=None):
+    """Скопировать рабочие артефакты в папку записи.
 
-    Файлы получают префикс «<child_id>_<session_id>_». В meta.json дополнительно
-    подмешиваются поля child_id и session_id (их во входном meta нет, потому что
-    process_video не знает про session).
+    Все файлы получают префикс «<child_id>_<session_id>_». В meta.json подмешиваются
+    поля child_id и session_id.
+
+    Если передан input_src — клампим его расширение по whitelist (BUG-02) и сохраняем
+    как <prefix>input.<ext>. Никакого участия оригинального имени файла в путях
+    хранимых артефактов — это требование Фазы 1 (SEC-01).
 
     Возвращает dict с путями к итоговым файлам.
     """
@@ -151,11 +191,23 @@ def save_session_files(child_id, session_id, video_src, csv_src, meta_src):
     meta_data["session_id"] = session_id
     _write_json(meta_dst, meta_data)
 
-    return {
+    result = {
         "video_path": str(video_dst),
         "csv_path": str(csv_dst),
         "meta_path": str(meta_dst),
     }
+
+    if input_src is not None:
+        input_src = Path(input_src)
+        # BUG-02: клампим расширение по whitelist; иначе .mp4 по умолчанию
+        suffix = input_src.suffix.lower()
+        if suffix not in ALLOWED_VIDEO_SUFFIXES:
+            suffix = ".mp4"
+        input_dst = sd / f"{prefix}input{suffix}"
+        shutil.copy2(str(input_src), str(input_dst))
+        result["input_path"] = str(input_dst)
+
+    return result
 
 
 def save_assessment(child_id, session_id, assessment):
