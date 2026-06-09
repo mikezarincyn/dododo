@@ -1005,6 +1005,20 @@ def read_csv_frame_range(csv_path):
     }
 
 
+_CACHE_META_FILENAME = "cache_meta.json"
+
+
+def _video_provenance(video_path):
+    """Источник истины для проверки реюза кэша. Возвращает dict с mtime+size.
+    sha256 НЕ берём — на 100+ MB видео слишком дорого; mtime+size ловят
+    переобработку с тем же session_id (новое содержимое → другой mtime/size)."""
+    st = video_path.stat()
+    return {
+        "size_bytes": st.st_size,
+        "mtime_ns": st.st_mtime_ns,
+    }
+
+
 def extract_frames_to_cache(video_path, cache_dir, frame_min, expected_count, progress_cb=None):
     """Покадровая распаковка через cv2.VideoCapture последовательным read().
 
@@ -1015,37 +1029,71 @@ def extract_frames_to_cache(video_path, cache_dir, frame_min, expected_count, pr
       expected_count: ожидаемое число кадров = frame_max - frame_min + 1.
       progress_cb(written, total): опциональный колбэк прогресса.
 
-    Возвращает dict: {reused: bool, frames_written: int, cache_dir: str}.
-    Бросает RuntimeError с конкретными числами, если число записанных PNG не сошлось.
+    BUG-01 (Фаза 2): реюз кэша подтверждается через cache_meta.json — там
+    лежат frame_min, expected_count, mtime_ns + size_bytes ИСХОДНОГО видео.
+    Без совпадения этих метаданных кэш не реюзается (даже если число PNG
+    случайно сошлось), кэш перераспаковывается.
 
-    Гарантии:
+    SEC-05: PNG-файлы пишутся через umask 0o077 → права 0o600 (только владелец).
+
+    Возвращает dict: {reused: bool, frames_written: int, cache_dir: str}.
+    Бросает RuntimeError с конкретными числами при расхождении frame-count.
+
+    Гарантии (как и раньше):
       - имя файла: frame_<idx:06d>.png, idx начинается с frame_min;
       - запись через cv2.imwrite (BGR корректно сохраняется в PNG);
       - читаем тот же файл, по которому считался CSV → выравнивание PNG[N] ↔
         строка frame==N обеспечено тождеством декода, а не совпадением счётчиков.
     """
+    import os as _os
     cache_dir = Path(cache_dir)
+    video_path = Path(video_path)
     frame_min = int(frame_min)
     expected_count = int(expected_count)
 
-    # Reuse, если в кэше ровно expected_count файлов с корректными именами
-    if cache_dir.exists():
-        existing = sorted(cache_dir.glob("frame_*.png"))
-        if len(existing) == expected_count:
-            return {
-                "reused": True,
-                "frames_written": len(existing),
-                "cache_dir": str(cache_dir),
-            }
-        # Несовпадение — стереть и распаковать заново
+    current_provenance = _video_provenance(video_path)
+    meta_path = cache_dir / _CACHE_META_FILENAME
+
+    # Reuse только если cache_meta.json матчит И число PNG ровно expected_count
+    if cache_dir.exists() and meta_path.exists():
+        try:
+            saved = json.loads(meta_path.read_text())
+        except Exception:
+            saved = None
+        if (
+            isinstance(saved, dict)
+            and saved.get("frame_min") == frame_min
+            and saved.get("expected_count") == expected_count
+            and saved.get("size_bytes") == current_provenance["size_bytes"]
+            and saved.get("mtime_ns") == current_provenance["mtime_ns"]
+        ):
+            existing = sorted(cache_dir.glob("frame_*.png"))
+            if len(existing) == expected_count:
+                return {
+                    "reused": True,
+                    "frames_written": len(existing),
+                    "cache_dir": str(cache_dir),
+                }
+        # Метаданные есть, но не совпали — старая распаковка, выкинуть.
+        shutil.rmtree(cache_dir)
+    elif cache_dir.exists():
+        # Каталог есть, но cache_meta.json нет (legacy / частичная распаковка).
+        # Не доверяем — стираем и распаковываем заново.
         shutil.rmtree(cache_dir)
 
     cache_dir.mkdir(parents=True, exist_ok=True)
+    # SEC-05: ужесточаем права на сам каталог (даже если frame_cache_dir уже сделал)
+    try:
+        cache_dir.chmod(0o700)
+    except OSError:
+        pass
 
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         raise RuntimeError(f"Не удалось открыть видео для распаковки: {video_path}")
 
+    # SEC-05: umask 0o077 → новые файлы получают 0o600
+    _prev_umask = _os.umask(0o077)
     frames_written = 0
     try:
         idx = frame_min
@@ -1056,12 +1104,18 @@ def extract_frames_to_cache(video_path, cache_dir, frame_min, expected_count, pr
             path = cache_dir / f"frame_{idx:06d}.png"
             if not cv2.imwrite(str(path), frame_bgr):
                 raise RuntimeError(f"cv2.imwrite вернул False для {path}")
+            # Подстраховка: даже если imwrite не уважает umask, доводим до 0o600
+            try:
+                path.chmod(0o600)
+            except OSError:
+                pass
             frames_written += 1
             idx += 1
             if progress_cb is not None:
                 progress_cb(frames_written, expected_count)
     finally:
         cap.release()
+        _os.umask(_prev_umask)
 
     if frames_written != expected_count:
         raise RuntimeError(
@@ -1070,6 +1124,21 @@ def extract_frames_to_cache(video_path, cache_dir, frame_min, expected_count, pr
             f"frame_max должен быть {frame_min + expected_count - 1}). "
             f"Источник видео: {video_path}"
         )
+
+    # Пишем cache_meta.json для будущего реюза
+    meta_payload = {
+        "frame_min": frame_min,
+        "expected_count": expected_count,
+        "frame_count_written": frames_written,
+        "size_bytes": current_provenance["size_bytes"],
+        "mtime_ns": current_provenance["mtime_ns"],
+        "video_path": str(video_path),
+    }
+    meta_path.write_text(json.dumps(meta_payload, indent=2))
+    try:
+        meta_path.chmod(0o600)
+    except OSError:
+        pass
 
     return {
         "reused": False,

@@ -26,8 +26,39 @@ from config import (
 
 # ---------- Внутренние помощники ----------
 
+# SEC-03: child_id и session_id — UUID4.hex (ровно 32 hex-символа). Любое
+# другое значение отвергается до конкатенации в путь. Это закрывает риск
+# path-traversal через подмену id-значений из внешнего источника (URL,
+# импорт чужой разметки, и т.п.) — даже при будущем расширении API.
+_ID_RE = re.compile(r"^[0-9a-f]{32}$")
+
+
+def _validate_id(value, kind):
+    """Жёсткая валидация UUID4.hex. Бросает ValueError с понятным сообщением."""
+    if not isinstance(value, str) or not _ID_RE.match(value):
+        raise ValueError(
+            f"невалидный {kind}: ожидался UUID4.hex (32 hex-символа), "
+            f"получено {value!r}"
+        )
+
+
+def _safe_under(base, candidate, kind):
+    """Защитный пояс поверх валидации id: проверка, что итоговый путь физически
+    остаётся внутри base (resolve().relative_to). Защищает от обхода даже при
+    ошибке валидации или нестандартной FS-семантике."""
+    try:
+        candidate.resolve().relative_to(base.resolve())
+    except ValueError:
+        raise ValueError(
+            f"путь {kind} выходит за пределы {base!r}: {candidate!r}"
+        )
+
+
 def _child_dir(child_id):
-    return CHILDREN_DIR / child_id
+    _validate_id(child_id, "child_id")
+    p = CHILDREN_DIR / child_id
+    _safe_under(CHILDREN_DIR, p, "child_dir")
+    return p
 
 
 def _child_file(child_id):
@@ -39,10 +70,17 @@ def _sessions_dir(child_id):
 
 
 def _session_dir(child_id, session_id):
-    return _sessions_dir(child_id) / session_id
+    _validate_id(session_id, "session_id")
+    p = _sessions_dir(child_id) / session_id
+    _safe_under(CHILDREN_DIR, p, "session_dir")
+    return p
 
 
 def _prefix(child_id, session_id):
+    # id уже провалидированы в _child_dir/_session_dir, но повторим
+    # на случай прямого вызова _prefix.
+    _validate_id(child_id, "child_id")
+    _validate_id(session_id, "session_id")
     return f"{child_id}_{session_id}_"
 
 
@@ -278,14 +316,34 @@ def resolve_session_meta_path(child_id, session_id):
 def frame_cache_dir(child_id, session_id):
     """Каталог PNG-кэша для сессии. Лежит вне data/children/... — это эфемерные
     производные данные (изображения детей), они не должны переживать удаление
-    исходного видео."""
+    исходного видео.
+
+    SEC-03: id-значения проходят жёсткую валидацию + resolve-под-base проверку.
+    SEC-05: каталог создаётся с правами 0o700 (только владелец).
+    """
+    _validate_id(child_id, "child_id")
+    _validate_id(session_id, "session_id")
     FRAME_CACHE_ROOT.mkdir(parents=True, exist_ok=True)
-    return FRAME_CACHE_ROOT / f"{child_id}_{session_id}"
+    p = FRAME_CACHE_ROOT / f"{child_id}_{session_id}"
+    _safe_under(FRAME_CACHE_ROOT, p, "frame_cache_dir")
+    # Создаём каталог с приватными правами (если ещё не создан в _safe_under-чек выше).
+    if not p.exists():
+        p.mkdir(parents=True, mode=0o700, exist_ok=True)
+    else:
+        # Подстраховка: даже на существующем каталоге выставим 0o700.
+        try:
+            p.chmod(0o700)
+        except OSError:
+            pass
+    return p
 
 
 def clear_frame_cache(child_id, session_id):
     """Полностью удалить PNG-кэш конкретной сессии."""
+    _validate_id(child_id, "child_id")
+    _validate_id(session_id, "session_id")
     d = FRAME_CACHE_ROOT / f"{child_id}_{session_id}"
+    _safe_under(FRAME_CACHE_ROOT, d, "frame_cache_dir")
     if d.exists():
         shutil.rmtree(d)
 
