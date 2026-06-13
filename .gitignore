@@ -29,6 +29,11 @@ __pycache__/
 # Streamlit секреты (если когда-нибудь появятся)
 .streamlit/secrets.toml
 
+# Node / фронтенд Стадии 1 (stage1/frontend)
+node_modules/
+dist/
+*.local
+
 # Системный temp (на всякий — если кто-то симлинком прокинет)
 /tmp/
 

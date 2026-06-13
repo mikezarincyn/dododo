@@ -1,0 +1,104 @@
+/* dododo design-system токены — подмножество, перенесённое из
+   design-system/project/tokens/* (значения verbatim). Источник DS не модифицируем;
+   это копия для нового фронтенда (правило CLAUDE.md).
+   Шрифты: self-host .woff2 пока НЕ подключены (приватность — без Google Fonts CDN);
+   используем 'Poppins'/'Inter' с system-ui fallback. TODO: добавить @font-face. */
+
+:root {
+  /* --- Brand greens --- */
+  --green-500: #72bca1;
+  --green-400: #89ccb3;
+  --green-100: #dcf3ea;
+  --teal-500: #58b4b7;
+  --navy-700: #0d3276;
+  --ink-900: #2b2a2a;
+  --white: #ffffff;
+  --coral-500: #ee6c4d;
+  --lilac-100: #eceafb;
+  --yellow-surface-100: #fff8e4;
+  --grey-surface-100: #f4f5f6;
+
+  /* --- Semantic --- */
+  --text-heading: var(--navy-700);
+  --text-body: var(--ink-900);
+  --text-muted: rgba(43, 42, 42, 0.65);
+  --surface-page: var(--white);
+  --action-primary: var(--green-500);
+  --action-primary-hover: var(--green-400);
+  --border-subtle: rgba(13, 50, 118, 0.1);
+
+  /* --- Typography --- */
+  --font-heading: "Poppins", system-ui, -apple-system, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --font-h2: 32px;
+  --font-h3: 24px;
+  --font-body-lg: 18px;
+  --font-body-size: 18px;
+  --font-small: 15px;
+  --font-button: 17px;
+  --lh-body: 1.5;
+  --lh-snug: 1.2;
+
+  /* --- Spacing (4px grid) --- */
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* --- Radii / shadow --- */
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-pill: 9999px;
+  --shadow-card: 0 8px 24px rgba(13, 50, 118, 0.08);
+
+  /* --- Buttons --- */
+  --btn-height: 56px;
+  --btn-pad-x: 32px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--font-body-size);
+  line-height: var(--lh-body);
+  color: var(--text-body);
+  background: var(--surface-page);
+  -webkit-font-smoothing: antialiased;
+}
+
+.ds-h2 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--font-h2);
+  line-height: var(--lh-snug);
+  color: var(--text-heading);
+  margin: 0 0 var(--space-3);
+}
+
+.ds-lead {
+  font-size: var(--font-body-lg);
+  color: var(--text-body);
+  margin: 0 0 var(--space-4);
+}
+
+.ds-body {
+  font-size: var(--font-body-size);
+}
+
+.ds-small {
+  font-size: var(--font-small);
+}
+
+.ds-muted {
+  color: var(--text-muted);
+}
