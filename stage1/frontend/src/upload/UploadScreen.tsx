@@ -3,21 +3,38 @@ import { useRef, useState } from "react";
 import { Button } from "../components/ds/Button";
 import { Card } from "../components/ds/Card";
 import { getDir, t } from "../i18n";
+import { uploadVideo } from "../api/client";
 import { TrustBadges } from "./TrustBadges";
 
 // Экран подготовки/загрузки. Захват — нативный <input type="file" accept="video/*"
 // capture> (без live-оверлея камеры): до открытия камеры показываем статичную
-// иллюстрацию контура. Загрузка байтов на бэкенд (MediaStore.put) — отдельный шаг.
-export function UploadScreen({ onSelected }: { onSelected?: (file: File) => void }) {
+// иллюстрацию контура. При выборе файла видео реально загружается на backend
+// (POST /api/submissions через MediaStore.put). `upload` инъектируется для тестов.
+export function UploadScreen({
+  childId = null,
+  upload = uploadVideo,
+}: {
+  childId?: string | null;
+  upload?: (childId: string | null, file: File) => Promise<{ submission_id: string }>;
+}) {
   const s = t().upload;
   const inputRef = useRef<HTMLInputElement>(null);
   const [queued, setQueued] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function onChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file) {
-      onSelected?.(file);
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await upload(childId, file);
       setQueued(true);
+    } catch {
+      setError(t().consent.error);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -60,7 +77,16 @@ export function UploadScreen({ onSelected }: { onSelected?: (file: File) => void
         style={{ display: "none" }}
         data-testid="video-input"
       />
-      <Button onClick={() => inputRef.current?.click()} style={{ inlineSize: "100%" }}>
+      {error && (
+        <p role="alert" style={{ color: "var(--coral-500)" }}>
+          {error}
+        </p>
+      )}
+      <Button
+        onClick={() => inputRef.current?.click()}
+        disabled={busy}
+        style={{ inlineSize: "100%" }}
+      >
         {s.chooseVideo}
       </Button>
     </main>

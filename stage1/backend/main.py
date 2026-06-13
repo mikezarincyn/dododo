@@ -6,7 +6,19 @@ P3 закладывает каркас: принудительный TLS/HSTS + 
 файловой системе или SDK провайдера в роутах быть не должно.
 """
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Response
+from pathlib import Path
+
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Response,
+    UploadFile,
+)
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import stage1_config as cfg
@@ -14,13 +26,15 @@ from auth import Principal, resolve_principal
 from media_store import (
     AccessDeniedError,
     ConsentIncompleteError,
+    ConsentRequiredError,
     MediaStore,
+    MediaStoreError,
     RegionNotConfiguredError,
     SubmissionNotFoundError,
     VideoUnavailableError,
     get_media_store,
 )
-from security import install_security
+from security import install_basic_gate, install_security
 
 
 class ConsentIn(BaseModel):
@@ -121,10 +135,37 @@ def create_app(*, enforce_https: bool | None = None) -> FastAPI:
         return {
             "session_id": rec["session_id"],
             "consent_id": rec["consent_id"],
+            "child_id": rec["child_id"],
             "display_code": rec["display_code"],
             "consent_version": rec["consent_version"],
             "timestamp_utc": rec["timestamp_utc"],
         }
+
+    @app.post("/api/submissions")
+    async def create_submission(
+        file: UploadFile = File(...),
+        child_id: str | None = Form(default=None),
+        store: MediaStore = Depends(get_media_store),
+    ):
+        """Загрузка видео родителем → MediaStore.put → submission (pending) →
+        попадает в очередь консоли. Имя ребёнка не принимается: только child_id
+        (псевдоним display_code сгенерирован на шаге согласия). no-retention и
+        fail-closed региона — внутри put()."""
+        data = await file.read()
+        ext = Path(file.filename or "").suffix
+        # Согласие уже записано на шаге /api/consent; здесь привязываемся к тому же
+        # ребёнку по child_id. Если child_id не передан — put() заведёт нового
+        # псевдонима (display_code), без свободного ввода имени.
+        consent_record = {"child_id": child_id} if child_id else {"source": "stage1_demo_upload"}
+        try:
+            submission_id = store.put(data, consent_record, original_ext=ext)
+        except RegionNotConfiguredError as e:
+            raise HTTPException(status_code=503, detail=str(e))
+        except (ConsentRequiredError, SubmissionNotFoundError) as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except (ValueError, MediaStoreError) as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return {"submission_id": submission_id}
 
     # ---- Консоль специалиста (P4) ----
 
@@ -250,6 +291,29 @@ def create_app(*, enforce_https: bool | None = None) -> FastAPI:
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         return {"ok": True, "video_purged": True}
+
+    # ---- App-wide демо-гейт (HTTP Basic поверх всего) ----
+    # Включается только если задан DODODO_DEMO_PASSWORD. /api/health освобождён
+    # (healthcheck платформы). Валидный reviewer/admin bearer тоже проходит гейт.
+    _demo_pwd = cfg.demo_basic_password()
+    if _demo_pwd:
+        install_basic_gate(
+            app,
+            username=cfg.demo_basic_user(),
+            password=_demo_pwd,
+            bearer_ok=lambda token: resolve_principal(token) is not None,
+            exempt=("/api/health",),
+        )
+
+    # ---- Single-origin: отдаём собранный фронт (index + console.html) ----
+    # Монтируем последним, чтобы явные /api-роуты имели приоритет. Если сборки
+    # ещё нет (dist отсутствует) — пропускаем, чтобы не падать в тестах/деве.
+    if cfg.FRONTEND_DIST.is_dir():
+        app.mount(
+            "/",
+            StaticFiles(directory=str(cfg.FRONTEND_DIST), html=True),
+            name="frontend",
+        )
 
     return app
 

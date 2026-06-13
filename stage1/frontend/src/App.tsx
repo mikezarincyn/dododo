@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { DemoBanner } from "./components/DemoBanner";
 import { ConsentScreen } from "./consent/ConsentScreen";
 import { UploadScreen } from "./upload/UploadScreen";
 import type { ConsentResult } from "./api/client";
@@ -7,11 +8,16 @@ import type { ConsentResult } from "./api/client";
 export default function App() {
   const [consent, setConsent] = useState<ConsentResult | null>(null);
 
-  if (!consent) {
-    return <ConsentScreen onConsented={setConsent} />;
-  }
-
-  // Согласие записано (session_id = consent.session_id). Дальше — экран загрузки.
-  // TODO: загрузка байтов видео на бэкенд (MediaStore.put) для этой сессии.
-  return <UploadScreen onSelected={() => undefined} />;
+  return (
+    <>
+      <DemoBanner />
+      {!consent ? (
+        <ConsentScreen onConsented={setConsent} />
+      ) : (
+        // Согласие записано → экран загрузки, привязанный к тому же ребёнку
+        // (child_id из ответа /api/consent). Имя не используется.
+        <UploadScreen childId={consent.child_id} />
+      )}
+    </>
+  );
 }

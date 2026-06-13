@@ -9,6 +9,7 @@ import { REQUIRED_CHECKBOX_IDS } from "./consentConfig";
 const stubResult = {
   session_id: "s",
   consent_id: "c",
+  child_id: "0".repeat(32),
   display_code: "CH-AAAAAA",
   consent_version: "stage1_consent_v1",
   timestamp_utc: "2026-01-01T00:00:00+00:00",

@@ -158,3 +158,26 @@ REVIEWERS_JSON_ENV = "DODODO_REVIEWERS_JSON"
 # по умолчанию. В локальной разработке выключается DODODO_ENFORCE_HTTPS=0.
 ENFORCE_HTTPS = os.environ.get("DODODO_ENFORCE_HTTPS", "1") != "0"
 HSTS_MAX_AGE = int(os.environ.get("DODODO_HSTS_MAX_AGE", str(63072000)))  # 2 года
+
+# ---------------------------------------------------------------------------
+# Раздача собранного фронта (single origin: FastAPI отдаёт /api + статику)
+# ---------------------------------------------------------------------------
+FRONTEND_DIST = Path(
+    os.environ.get(
+        "DODODO_FRONTEND_DIST",
+        str(Path(__file__).resolve().parent.parent / "frontend" / "dist"),
+    )
+)
+
+# ---------------------------------------------------------------------------
+# App-wide демо-гейт (HTTP Basic поверх ВСЕХ роутов + статики).
+# Если пароль не задан — гейт ВЫКЛЮЧЕН (удобно для тестов/дева). В проде задать
+# DODODO_DEMO_PASSWORD. Читается из окружения «вживую», чтобы тесты могли
+# включать/выключать его через monkeypatch.setenv.
+# ---------------------------------------------------------------------------
+def demo_basic_user() -> str:
+    return os.environ.get("DODODO_DEMO_USER", "demo")
+
+
+def demo_basic_password():
+    return os.environ.get("DODODO_DEMO_PASSWORD")  # None → гейт выключен

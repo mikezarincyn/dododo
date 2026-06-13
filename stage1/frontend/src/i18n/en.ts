@@ -12,6 +12,7 @@ export const en = {
   common: {
     loading: "Loading…",
     saved: "Saved.",
+    demoBanner: "DEMO — sample data only, not for real children's videos",
   },
   consent: {
     title: "Before a specialist looks",
