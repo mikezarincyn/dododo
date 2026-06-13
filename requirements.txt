@@ -1,0 +1,12 @@
+# dododo — Streamlit engine demo (Streamlit Community Cloud).
+# Точка входа: app.py. Системные пакеты (ffmpeg, libGL) — в packages.txt.
+# opencv приходит транзитивно с mediapipe (opencv-contrib-python); отдельно не
+# пиним, чтобы не словить конфликт headless/contrib — libGL даёт packages.txt.
+# Версии совпадают с локально протестированным окружением.
+
+streamlit==1.58.0
+mediapipe==0.10.35
+numpy==2.4.6
+scipy==1.17.1
+matplotlib==3.10.9
+faster-whisper==1.2.1

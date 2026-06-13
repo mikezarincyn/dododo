@@ -127,6 +127,60 @@ div[data-testid="stAlert"] {
 
 _inject_ds_theme()
 
+
+# ============================================================================
+# Онлайн-демо: один общий пароль (через st.secrets) + видимая плашка DEMO.
+# Гейт активен ТОЛЬКО под Streamlit-рантаймом; при обычном `import app`
+# (pytest/CLI) он пропускается, чтобы не вызывать st.stop() и не ломать тесты.
+# Расчётный слой (engine/storage/степпер) НЕ затрагивается.
+# ============================================================================
+_DEMO_BANNER = "DEMO — sample data only, not for real children's videos"
+
+
+def _under_streamlit_runtime() -> bool:
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+        return get_script_run_ctx() is not None
+    except Exception:
+        return False
+
+
+def _demo_banner():
+    st.warning(_DEMO_BANNER, icon="⚠️")
+
+
+def _require_demo_access():
+    """Доступ к онлайн-демо по одному общему паролю из st.secrets['demo_password'].
+    Без верного пароля — форма ввода и st.stop(). Если пароль не задан в Secrets —
+    fail-closed (демо закрыто)."""
+    if not _under_streamlit_runtime():
+        return  # обычный import (тесты/CLI) — гейт не применяется
+    if st.session_state.get("_demo_auth_ok"):
+        return
+    _demo_banner()
+    try:
+        expected = st.secrets["demo_password"]
+    except Exception:
+        expected = None
+    if not expected:
+        st.error(
+            "Демо не сконфигурировано: задайте `demo_password` в "
+            "Settings → Secrets (см. DEPLOY.md)."
+        )
+        st.stop()
+    pwd = st.text_input("Пароль для доступа к демо", type="password")
+    if pwd and pwd == expected:
+        st.session_state["_demo_auth_ok"] = True
+        st.rerun()
+    if pwd:
+        st.error("Неверный пароль.")
+    st.stop()
+
+
+_require_demo_access()
+_demo_banner()
+
 st.title("dododo — анализ видео")
 st.caption(
     "Инструмент поддержки наблюдений и коучинга родителей. "

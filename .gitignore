@@ -9,6 +9,9 @@ venv/
 
 # MediaPipe модели (бинарники, не код)
 *.task
+# …кроме моделей движка — они нужны онлайн-демо (Streamlit Cloud клонирует репо).
+!pose_landmarker.task
+!face_landmarker.task
 
 # Python артефакты
 __pycache__/
@@ -25,6 +28,9 @@ __pycache__/
 *.avi
 *.mkv
 *.wav
+# …кроме согласованных ВЗРОСЛЫХ/синтетических демо-клипов для онлайн-демо.
+!demo_clips/*.mp4
+!demo_clips/*.mov
 
 # Streamlit секреты (если когда-нибудь появятся)
 .streamlit/secrets.toml
