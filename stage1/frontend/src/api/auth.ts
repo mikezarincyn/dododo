@@ -34,6 +34,8 @@ export interface AuthApi {
   login(email: string, password: string): Promise<AuthUser>;
   register(input: { email: string; password: string; name: string; role: "parent" | "ot"; hcpc?: string }): Promise<{ user: AuthUser; pending: boolean }>;
   logout(): Promise<void>;
+  requestReset(email: string): Promise<{ reset_path?: string; token?: string }>;
+  resetPassword(token: string, newPassword: string): Promise<void>;
 }
 
 export const authApi: AuthApi = {
@@ -62,5 +64,23 @@ export const authApi: AuthApi = {
   },
   async logout() {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+  },
+  async requestReset(email) {
+    const r = await fetch("/api/auth/reset-request", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    return jsonOrThrow<{ reset_path?: string; token?: string }>(r);
+  },
+  async resetPassword(token, newPassword) {
+    const r = await fetch("/api/auth/reset", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, new_password: newPassword }),
+    });
+    await jsonOrThrow<{ ok: boolean }>(r);
   },
 };

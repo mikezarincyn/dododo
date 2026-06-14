@@ -10,7 +10,7 @@ const t = makeT("en");
 const user: AuthUser = { id: "p1", email: "a@b.com", role: "parent", status: "active", name: "A" };
 
 function api(login: AuthApi["login"]): AuthApi {
-  return { me: vi.fn(async () => null), login, register: vi.fn(), logout: vi.fn() } as unknown as AuthApi;
+  return { me: vi.fn(async () => null), login, register: vi.fn(), logout: vi.fn(), requestReset: vi.fn(), resetPassword: vi.fn() } as unknown as AuthApi;
 }
 
 describe("AuthScreen (login)", () => {
@@ -69,5 +69,23 @@ describe("AuthScreen (login)", () => {
     await u.click(screen.getByRole("button", { name: t("auth.register.submitOt") }));
     await waitFor(() => expect(screen.getByText(t("auth.register.otPending"))).toBeInTheDocument());
     expect(onAuthed).not.toHaveBeenCalled();
+  });
+
+  it("forgot-password flow surfaces the reset form and sets a new password", async () => {
+    const u = userEvent.setup();
+    const requestReset = vi.fn(async () => ({ token: "tok123", reset_path: "/?reset_token=tok123" }));
+    const resetPassword = vi.fn(async () => undefined);
+    const a = { me: vi.fn(async () => null), login: vi.fn(), register: vi.fn(), logout: vi.fn(), requestReset, resetPassword } as unknown as AuthApi;
+    render(<AuthScreen lang="en" setLang={() => {}} onAuthed={vi.fn()} api={a} />);
+    await u.click(screen.getByRole("button", { name: t("auth.forgot") }));
+    await u.type(screen.getByLabelText(t("auth.email")), "p@x.com");
+    await u.click(screen.getByRole("button", { name: t("auth.forgot.submit") }));
+    expect(requestReset).toHaveBeenCalledWith("p@x.com");
+    // now in reset mode (demo surfaces the link in-app)
+    await waitFor(() => expect(screen.getByLabelText(t("auth.reset.newPassword"))).toBeInTheDocument());
+    await u.type(screen.getByLabelText(t("auth.reset.newPassword")), "newpassword2");
+    await u.click(screen.getByRole("button", { name: t("auth.reset.submit") }));
+    expect(resetPassword).toHaveBeenCalledWith("tok123", "newpassword2");
+    await waitFor(() => expect(screen.getByText(t("auth.reset.done"))).toBeInTheDocument());
   });
 });

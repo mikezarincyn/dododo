@@ -23,6 +23,7 @@ from fastapi import (
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import reset
 import sessions
 import stage1_config as cfg
 import users
@@ -114,6 +115,15 @@ class AdminUserIn(BaseModel):
 class AdminCareLinkIn(BaseModel):
     child_id: str
     ot_id: str
+
+
+class ResetRequestIn(BaseModel):
+    email: str
+
+
+class ResetIn(BaseModel):
+    token: str
+    new_password: str
 
 
 # Pilot parent identity: a client-held opaque id (uuid4 hex) in the X-Parent-Id
@@ -282,6 +292,31 @@ def create_app(*, enforce_https: bool | None = None) -> FastAPI:
         if not u:
             raise HTTPException(status_code=401, detail="not signed in")
         return {"user": users.public_view(u)}
+
+    @app.post("/api/auth/reset-request")
+    def auth_reset_request(payload: ResetRequestIn):
+        """Create a reset link. No SMTP in the pilot: we return the link in the
+        response (prod will email it). Always 200 (no email enumeration); the link
+        is only present when the email matches an active account."""
+        u = users.get_by_email(payload.email)
+        out: dict = {"ok": True}
+        if u and u.get("status") != "deactivated":
+            token = reset.create(u["id"])
+            out["reset_path"] = f"/?reset_token={token}"  # demo: surfaced on screen
+            out["token"] = token
+        return out
+
+    @app.post("/api/auth/reset")
+    def auth_reset(payload: ResetIn):
+        uid = reset.consume(payload.token)
+        if not uid:
+            raise HTTPException(status_code=400, detail="invalid or expired reset link")
+        try:
+            users.set_password(uid, payload.new_password)
+        except users.UserError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        sessions.destroy_all_for_user(uid)  # force re-login everywhere
+        return {"ok": True}
 
     @app.get("/api/health")
     def health(store: MediaStore = Depends(get_media_store)):

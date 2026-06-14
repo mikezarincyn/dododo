@@ -5,11 +5,21 @@ import { Button, Card, Icon, Input, LangSwitcher, Logo, Segmented, TwoTone } fro
 import { authApi, type AuthApi, type AuthUser } from "../api/auth";
 import { makeT, type Lang } from "../i18n/strings";
 
-type Mode = "login" | "register";
+type Mode = "login" | "register" | "forgot" | "reset";
 
-// Pre-auth screen: sign in OR create an account. Parents self-register (active
-// immediately); therapists request access (pending until an admin approves).
-// (Password reset is added in the next stage.)
+function initialMode(): { mode: Mode; token: string } {
+  try {
+    const token = new URLSearchParams(window.location.search).get("reset_token");
+    if (token) return { mode: "reset", token };
+  } catch {
+    /* ignore */
+  }
+  return { mode: "login", token: "" };
+}
+
+// Pre-auth screen: sign in / create account / forgot password / set new password.
+// Parents self-register (active); therapists request access (pending → admin
+// approval). Password reset has no SMTP in the pilot — the link is shown on screen.
 export function AuthScreen({
   lang,
   setLang,
@@ -22,7 +32,9 @@ export function AuthScreen({
   api?: AuthApi;
 }) {
   const t = makeT(lang);
-  const [mode, setMode] = useState<Mode>("login");
+  const init = initialMode();
+  const [mode, setMode] = useState<Mode>(init.mode);
+  const [resetToken, setResetToken] = useState(init.token);
   const [regRole, setRegRole] = useState<"parent" | "ot">("parent");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -30,47 +42,66 @@ export function AuthScreen({
   const [hcpc, setHcpc] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [otPending, setOtPending] = useState(false);
 
   function go(m: Mode) {
     setMode(m);
     setError(null);
+    setInfo(null);
     setOtPending(false);
+    setPassword("");
   }
 
-  async function login() {
-    if (!email || !password || busy) return;
+  async function run(fn: () => Promise<void>) {
+    if (busy) return;
     setBusy(true);
     setError(null);
     try {
-      onAuthed(await api.login(email, password));
+      await fn();
     } catch (e) {
       const status = (e as { status?: number }).status;
-      setError(status === 403 ? (e as Error).message : t("auth.error.invalid"));
+      if (mode === "login") setError(status === 403 ? (e as Error).message : t("auth.error.invalid"));
+      else if (mode === "register") setError(status === 409 ? t("auth.register.emailTaken") : (e as Error).message);
+      else if (mode === "reset") setError(status === 400 ? t("auth.reset.badToken") : (e as Error).message);
+      else setError((e as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
-  async function register() {
-    if (!email || !password || !name || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
+  const login = () => run(async () => onAuthed(await api.login(email, password)));
+  const register = () =>
+    run(async () => {
       const res = await api.register({ email, password, name, role: regRole, hcpc: hcpc || undefined });
-      if (res.pending) setOtPending(true); // therapist → awaits approval
-      else onAuthed(res.user); // parent → straight in
-    } catch (e) {
-      const status = (e as { status?: number }).status;
-      setError(status === 409 ? t("auth.register.emailTaken") : (e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
+      if (res.pending) setOtPending(true);
+      else onAuthed(res.user);
+    });
+  const forgot = () =>
+    run(async () => {
+      const res = await api.requestReset(email);
+      if (res.token) {
+        setResetToken(res.token);
+        go("reset");
+        setInfo(t("auth.forgot.demoNote"));
+      } else {
+        setInfo(t("auth.forgot.checkEmail"));
+      }
+    });
+  const doReset = () =>
+    run(async () => {
+      await api.resetPassword(resetToken, password);
+      go("login");
+      setInfo(t("auth.reset.done"));
+    });
 
-  const title = mode === "login"
-    ? { a: t("auth.signInTitle.a"), b: t("auth.signInTitle.b"), sub: t("auth.signInSub") }
-    : { a: t("auth.register.title.a"), b: t("auth.register.title.b"), sub: t("auth.passwordHint") };
+  const titles: Record<Mode, { a: string; b: string; sub: string }> = {
+    login: { a: t("auth.signInTitle.a"), b: t("auth.signInTitle.b"), sub: t("auth.signInSub") },
+    register: { a: t("auth.register.title.a"), b: t("auth.register.title.b"), sub: t("auth.passwordHint") },
+    forgot: { a: t("auth.forgot.title.a"), b: t("auth.forgot.title.b"), sub: t("auth.forgot.sub") },
+    reset: { a: t("auth.reset.title.a"), b: t("auth.reset.title.b"), sub: t("auth.passwordHint") },
+  };
+  const title = titles[mode];
 
   return (
     <>
@@ -97,33 +128,52 @@ export function AuthScreen({
                   <button type="button" className="linkish" onClick={() => go("login")}>{t("auth.haveAccount")}</button>
                 </div>
               ) : (
-                <form className="col" style={{ gap: 18 }} onSubmit={(e) => { e.preventDefault(); mode === "login" ? login() : register(); }}>
+                <form className="col" style={{ gap: 18 }} onSubmit={(e) => {
+                  e.preventDefault();
+                  if (mode === "login") login();
+                  else if (mode === "register") register();
+                  else if (mode === "forgot") forgot();
+                  else doReset();
+                }}>
+                  {info ? <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--green-ink)" }}>{info}</p> : null}
+
                   {mode === "register" ? (
                     <>
-                      <Segmented
-                        options={[{ value: "parent", label: t("auth.register.iAmParent") }, { value: "ot", label: t("auth.register.iAmOt") }]}
-                        value={regRole}
-                        onChange={(v) => setRegRole(v as "parent" | "ot")}
-                      />
+                      <Segmented options={[{ value: "parent", label: t("auth.register.iAmParent") }, { value: "ot", label: t("auth.register.iAmOt") }]} value={regRole} onChange={(v) => setRegRole(v as "parent" | "ot")} />
                       <Input label={t("auth.name")} value={name} onChange={(e) => setName(e.target.value)} />
                     </>
                   ) : null}
-                  <Input label={t("auth.email")} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-                  <Input label={t("auth.password")} type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+
+                  {mode !== "reset" ? (
+                    <Input label={t("auth.email")} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  ) : null}
+
+                  {mode === "login" || mode === "register" || mode === "reset" ? (
+                    <Input label={mode === "reset" ? t("auth.reset.newPassword") : t("auth.password")} type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                  ) : null}
+
                   {mode === "register" && regRole === "ot" ? (
                     <Input label={t("auth.hcpc")} value={hcpc} onChange={(e) => setHcpc(e.target.value)} />
                   ) : null}
+
                   {error ? <p role="alert" style={{ color: "var(--coral-500)", margin: 0, fontSize: 14 }}>{error}</p> : null}
+
                   <div>
                     {mode === "login" ? (
-                      <Button variant="primary" size="md" disabled={!email || !password || busy} onClick={login}
-                        iconRight={<Icon name="arrow-right" size={16} color={!email || !password || busy ? "rgba(43,42,42,.45)" : "#fff"} />}>
+                      <Button variant="primary" size="md" disabled={!email || !password || busy} onClick={login} iconRight={<Icon name="arrow-right" size={16} color={!email || !password || busy ? "rgba(43,42,42,.45)" : "#fff"} />}>
                         {busy ? t("common.loading") : t("auth.signIn")}
                       </Button>
-                    ) : (
-                      <Button variant="primary" size="md" disabled={!email || !password || !name || busy} onClick={register}
-                        iconRight={<Icon name="arrow-right" size={16} color={!email || !password || !name || busy ? "rgba(43,42,42,.45)" : "#fff"} />}>
+                    ) : mode === "register" ? (
+                      <Button variant="primary" size="md" disabled={!email || !password || !name || busy} onClick={register} iconRight={<Icon name="arrow-right" size={16} color={!email || !password || !name || busy ? "rgba(43,42,42,.45)" : "#fff"} />}>
                         {busy ? t("common.loading") : regRole === "ot" ? t("auth.register.submitOt") : t("auth.register.submitParent")}
+                      </Button>
+                    ) : mode === "forgot" ? (
+                      <Button variant="primary" size="md" disabled={!email || busy} onClick={forgot}>
+                        {busy ? t("common.loading") : t("auth.forgot.submit")}
+                      </Button>
+                    ) : (
+                      <Button variant="primary" size="md" disabled={!password || busy} onClick={doReset}>
+                        {busy ? t("common.loading") : t("auth.reset.submit")}
                       </Button>
                     )}
                   </div>
@@ -134,7 +184,10 @@ export function AuthScreen({
             {!otPending ? (
               <div className="row" style={{ marginTop: 16, gap: 16, flexWrap: "wrap" }}>
                 {mode === "login" ? (
-                  <button type="button" className="linkish" onClick={() => go("register")}>{t("auth.createAccount")}</button>
+                  <>
+                    <button type="button" className="linkish" onClick={() => go("register")}>{t("auth.createAccount")}</button>
+                    <button type="button" className="linkish" onClick={() => go("forgot")}>{t("auth.forgot")}</button>
+                  </>
                 ) : (
                   <button type="button" className="linkish" onClick={() => go("login")}>{t("auth.haveAccount")}</button>
                 )}

@@ -17,6 +17,8 @@ function apiWith(user: AuthUser | null): AuthApi {
     login: vi.fn(async () => user as AuthUser),
     register: vi.fn(async () => ({ user: user as AuthUser, pending: false })),
     logout: vi.fn(async () => undefined),
+    requestReset: vi.fn(async () => ({})),
+    resetPassword: vi.fn(async () => undefined),
   };
 }
 
