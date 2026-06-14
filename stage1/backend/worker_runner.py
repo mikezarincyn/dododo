@@ -131,6 +131,30 @@ def _series(engine, reader, csv):
     return _downsample(times, engine.smooth_signal(signal))
 
 
+def _checklist_hints(scenario, call_times, lat):
+    """Подсказки к пунктам чек-листа ТОЛЬКО там, где движок реально может их
+    обосновать (сценарий «реакция на имя»): turn (поворот к зовущему) и attempt
+    (на какой оклик пришёл первый отклик). Остальные пункты движок обосновать не
+    может → подсказки нет (НЕ выдумываем). Подсказки — нейтральный ФАКТ о сигнале,
+    не суждение; в UI скрыты до ответа ОТ и помечены in-calibration."""
+    if scenario != "name" or lat is None or not call_times:
+        return {}
+    hints = {}
+    results = lat.get("results", [])
+    first = next((r for r in results if r.get("latency_s") is not None), None)
+    if (lat.get("responded") or 0) > 0 and first is not None:
+        hints["turn"] = {"value": "yes",
+                         "basis": f"head-turn detected {float(first['latency_s']):.1f} s after a call"}
+        idx = results.index(first)
+        if idx <= 2:  # пункт attempt предлагает только 1/2/3
+            hints["attempt"] = {"value": str(idx + 1), "basis": f"first response on call #{idx + 1}"}
+    else:
+        hints["turn"] = {"value": "no",
+                         "basis": f"{len(call_times)} call(s) detected, no head-turn within the response window"}
+        hints["attempt"] = {"value": "none", "basis": "no response detected to any call"}
+    return hints
+
+
 def build_bundle(engine, result, scenario, audio, speech, call_times, lat):
     """Богатый эфемерный аналитический пакет для кабинета ОТ. Только сырой сигнал
     как факты — НЕ суждения. checklist_hints наполняются в Этапе 2."""
@@ -169,7 +193,7 @@ def build_bundle(engine, result, scenario, audio, speech, call_times, lat):
         },
         "latencies": [{"call_t": _num(r.get("call_t")), "latency_s": _num(r.get("latency_s"))}
                       for r in (lat or {}).get("results", [])] if lat else [],
-        "checklist_hints": {},  # Этап 2 — только обоснуемые движком подсказки
+        "checklist_hints": _checklist_hints(scenario, call_times, lat),
     }
     return bundle
 
