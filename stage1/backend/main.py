@@ -42,7 +42,7 @@ from media_store import (
     VideoUnavailableError,
     get_media_store,
 )
-from security import install_basic_gate, install_security
+from security import install_security
 
 
 class ConsentIn(BaseModel):
@@ -833,18 +833,11 @@ def create_app(*, enforce_https: bool | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(e))
         return {"ok": True, "video_purged": True}
 
-    # ---- App-wide демо-гейт (HTTP Basic поверх всего) ----
-    # Включается только если задан DODODO_DEMO_PASSWORD. /api/health освобождён
-    # (healthcheck платформы). Валидный reviewer/admin bearer тоже проходит гейт.
-    _demo_pwd = cfg.demo_basic_password()
-    if _demo_pwd:
-        install_basic_gate(
-            app,
-            username=cfg.demo_basic_user(),
-            password=_demo_pwd,
-            bearer_ok=lambda token: resolve_principal(token) is not None,
-            exempt=("/api/health",),
-        )
+    # Внешний демо-гейт (HTTP Basic поверх всего) УДАЛЁН (Этап G): теперь единственная
+    # защита — внутренний email/password-вход (сессия), который стоит перед ВСЕМИ
+    # данными/эндпоинтами (require_parent / require_reviewer / require_admin). Первый
+    # экран по ссылке — экран входа. DEMO-плашка и немедицинский дисклеймер остаются
+    # на фронте (они не были частью гейта). Саморегистрация родителя открыта (осознанно).
 
     # ---- Single-origin: отдаём собранный фронт (index + console.html) ----
     # Монтируем последним, чтобы явные /api-роуты имели приоритет. Если сборки

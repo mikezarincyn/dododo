@@ -1,51 +1,59 @@
-"""App-wide демо-гейт (Этап A): один общий HTTP Basic поверх всех роутов.
-Выключен, если пароль не задан (тесты/дев). Валидный консольный bearer тоже
-проходит внешний гейт (роль проверяется на эндпоинте)."""
+"""Этап G — внешний демо-гейт УДАЛЁН: единственная защита теперь внутренний
+email/password-вход (сессия) на уровне эндпоинтов. Здесь проверяем, что:
+  - внешнего basic-гейта больше нет (DODODO_DEMO_PASSWORD ни на что не влияет);
+  - но БЕЗ валидной сессии ни один защищённый эндпоинт не отдаёт данные (401/403);
+  - публичные эндпоинты (health, consent-config) доступны без креденшелов.
+Снимаем внешний слой, НЕ ослабляя внутренний."""
 
 import base64
-import json
 
 from fastapi.testclient import TestClient
 
-import stage1_config as cfg
 from main import create_app
 
 
-def _basic(user, pwd):
-    token = base64.b64encode(f"{user}:{pwd}".encode()).decode()
-    return {"Authorization": f"Basic {token}"}
+def _client():
+    return TestClient(create_app(enforce_https=False))
 
 
-def test_no_gate_when_password_unset(sandbox, monkeypatch):
-    monkeypatch.delenv("DODODO_DEMO_PASSWORD", raising=False)
-    c = TestClient(create_app(enforce_https=False))
-    assert c.get("/api/consent/config").status_code == 200  # гейт выключен
-
-
-def test_gate_blocks_without_credentials(sandbox, monkeypatch):
+def test_no_external_gate_even_if_demo_password_set(sandbox, monkeypatch):
+    # Раньше это включало внешний 401-гейт. Теперь переменная игнорируется —
+    # публичные роуты доступны без HTTP Basic.
     monkeypatch.setenv("DODODO_DEMO_PASSWORD", "s3cret")
-    c = TestClient(create_app(enforce_https=False))
-    r = c.get("/api/consent/config")
-    assert r.status_code == 401
-    assert "Basic" in r.headers.get("www-authenticate", "")
+    c = _client()
+    assert c.get("/api/consent/config").status_code == 200
+    # И никакого WWW-Authenticate/Basic-челленджа на публичном роуте.
+    assert "www-authenticate" not in {k.lower() for k in c.get("/api/consent/config").headers}
 
 
-def test_gate_allows_correct_basic(sandbox, monkeypatch):
-    monkeypatch.setenv("DODODO_DEMO_PASSWORD", "s3cret")
-    c = TestClient(create_app(enforce_https=False))
-    assert c.get("/api/consent/config", headers=_basic("demo", "s3cret")).status_code == 200
-    assert c.get("/api/consent/config", headers=_basic("demo", "wrong")).status_code == 401
+def test_public_endpoints_open(sandbox):
+    c = _client()
+    assert c.get("/api/health").status_code == 200
+    assert c.get("/api/consent/config").status_code == 200
 
 
-def test_gate_allows_valid_reviewer_bearer(sandbox, monkeypatch):
-    monkeypatch.setenv("DODODO_DEMO_PASSWORD", "s3cret")
-    monkeypatch.setenv(cfg.REVIEWERS_JSON_ENV, json.dumps({"tok_a": {"actor_id": "ot_a", "role": "reviewer"}}))
-    c = TestClient(create_app(enforce_https=False))
-    assert c.get("/api/console/queue", headers={"Authorization": "Bearer tok_a"}).status_code == 200
-    assert c.get("/api/console/queue", headers={"Authorization": "Bearer nope"}).status_code == 401
+def test_protected_endpoints_need_a_session(sandbox, monkeypatch):
+    """Без сессии/принципала защищённые данные не отдаются — внутренний слой держит."""
+    monkeypatch.setenv("DODODO_DEMO_PASSWORD", "s3cret")  # не должно ничего открыть
+    c = _client()
+    protected = [
+        "/api/parent/children",
+        "/api/parent/submissions",
+        "/api/ot/children",
+        "/api/ot/queue",
+        "/api/ot/video/" + "a" * 32,
+        "/api/console/queue",
+        "/api/admin/overview",
+    ]
+    for path in protected:
+        r = c.get(path)
+        assert r.status_code in (401, 403), f"{path} leaked data without a session: {r.status_code}"
 
 
-def test_health_is_exempt_from_gate(sandbox, monkeypatch):
-    monkeypatch.setenv("DODODO_DEMO_PASSWORD", "s3cret")
-    c = TestClient(create_app(enforce_https=False))
-    assert c.get("/api/health").status_code == 200  # healthcheck платформы
+def test_basic_credentials_do_not_authenticate_anymore(sandbox, monkeypatch):
+    """Старый demo:dododo2026 в Basic больше НЕ даёт доступ к защищённым данным."""
+    monkeypatch.setenv("DODODO_DEMO_PASSWORD", "dododo2026")
+    c = _client()
+    basic = base64.b64encode(b"demo:dododo2026").decode()
+    r = c.get("/api/parent/children", headers={"Authorization": f"Basic {basic}"})
+    assert r.status_code in (401, 403)
