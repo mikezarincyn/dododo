@@ -44,6 +44,20 @@ _ID_RE = re.compile(r"^[0-9a-f]{32}$")
 _DISPLAY_CODE_RE = re.compile(rf"^{cfg.DISPLAY_CODE_PATTERN}$")
 
 
+def _status_badge_for(state: str | None) -> str:
+    """Map a submission state to the UI StatusBadge vocabulary
+    (queued / processing / ready / error / reviewed)."""
+    if state == cfg.SUB_STATE_QUEUED:
+        return "queued"
+    if state == cfg.SUB_STATE_PROCESSING:
+        return "processing"
+    if state in cfg.SUB_STATES_AWAITING_REVIEW:  # ready / in_review
+        return "ready"
+    if state == cfg.SUB_STATE_FAILED:
+        return "error"
+    return "reviewed"
+
+
 # ===========================================================================
 # Ошибки
 # ===========================================================================
@@ -695,7 +709,7 @@ class EphemeralMediaStore(MediaStore):
             if subs:
                 latest = subs[-1]
                 st = latest.get("state")
-                last_video = "ready" if st in ("pending", "in_review") else "reviewed"
+                last_video = _status_badge_for(st)
             obs = self.list_observations(child_id)  # newest-first
             progress = self.child_progress(child_id)
             domains = {}
@@ -729,7 +743,8 @@ class EphemeralMediaStore(MediaStore):
                 continue
             if meta.get("child_id") not in linked:
                 continue
-            if meta.get("video_purged") or meta.get("state") not in ("pending", "in_review"):
+            # ОТ видит клип ТОЛЬКО после обработки воркером (ready) или когда уже открыл (in_review).
+            if meta.get("video_purged") or meta.get("state") not in cfg.SUB_STATES_AWAITING_REVIEW:
                 continue
             out.append({
                 "submission_id": meta.get("submission_id"),
@@ -852,7 +867,7 @@ class EphemeralMediaStore(MediaStore):
             "consent_id": consent_id,
             "child_id": child_id,
             "display_code": display_code,
-            "state": "pending",
+            "state": cfg.SUB_STATE_QUEUED,  # загружено → ждёт фонового воркера
             "scenario": scenario if scenario in cfg.SCENARIO_IDS else None,
             "source_sha256": source_sha256,
             "original_ext": ext,
@@ -922,7 +937,7 @@ class EphemeralMediaStore(MediaStore):
                 meta = _read_json(sf)
             except Exception:
                 continue
-            if meta.get("state") in ("pending", "in_review") and not meta.get("video_purged"):
+            if meta.get("state") in cfg.SUB_STATES_VIDEO_LIVE and not meta.get("video_purged"):
                 out.append(meta)
         out.sort(key=lambda m: m.get("created_at", ""))
         return out
@@ -1020,7 +1035,7 @@ class EphemeralMediaStore(MediaStore):
                 meta = _read_json(sf)
             except Exception:
                 continue
-            if meta.get("video_purged") or meta.get("state") not in ("pending", "in_review"):
+            if meta.get("video_purged") or meta.get("state") not in cfg.SUB_STATES_VIDEO_LIVE:
                 continue
             assigned = meta.get("assigned_reviewer")
             if not is_admin and assigned not in (None, actor):
@@ -1105,7 +1120,7 @@ class EphemeralMediaStore(MediaStore):
                 meta = _read_json(sf)
             except Exception:
                 continue
-            if meta.get("video_purged") or meta.get("state") not in ("pending", "in_review"):
+            if meta.get("video_purged") or meta.get("state") not in cfg.SUB_STATES_VIDEO_LIVE:
                 continue
             try:
                 created = datetime.fromisoformat(meta.get("created_at", ""))
@@ -1163,6 +1178,98 @@ class EphemeralMediaStore(MediaStore):
         meta["updated_at"] = _now_iso()
         _write_json_0600(self._submission_file(submission_id), meta)
         self._append_audit("mark_reviewed_and_purge", submission_id=submission_id)
+
+    # ------------------------------------------------------------------
+    # Асинхронная обработка (фоновый воркер). Фасад остаётся единственной точкой
+    # доступа к ФС: воркер дёргает эти методы, сам файлов не трогает.
+    # ------------------------------------------------------------------
+    def list_queued_ids(self) -> list[str]:
+        """submission_id записей, ждущих обработки (state=queued), старейшие первыми."""
+        if not cfg.SUBMISSIONS_DIR.exists():
+            return []
+        rows = []
+        for d in cfg.SUBMISSIONS_DIR.iterdir():
+            sf = d / "submission.json"
+            if not sf.is_file():
+                continue
+            try:
+                meta = _read_json(sf)
+            except Exception:
+                continue
+            if meta.get("state") == cfg.SUB_STATE_QUEUED and not meta.get("video_purged"):
+                rows.append((meta.get("created_at", ""), meta["submission_id"]))
+        rows.sort()
+        return [sid for _, sid in rows]
+
+    def claim_for_processing(self, submission_id: str) -> bool:
+        """Атомарно перевести queued → processing. True, если запись была забрана
+        этим вызовом; False, если она уже не queued (забрана другим / стёрта)."""
+        _require_region()
+        meta = self.read_submission(submission_id)
+        if meta.get("state") != cfg.SUB_STATE_QUEUED or meta.get("video_purged"):
+            return False
+        meta["state"] = cfg.SUB_STATE_PROCESSING
+        meta["processing_started_at"] = _now_iso()
+        meta["updated_at"] = _now_iso()
+        _write_json_0600(self._submission_file(submission_id), meta)
+        self._append_audit("claim_for_processing", submission_id=submission_id)
+        return True
+
+    def mark_ready(self, submission_id: str, auto_metrics: list | None = None) -> None:
+        """Обработка завершена: метрики извлечены, клип ждёт ОТ. Видео НЕ стираем —
+        ОТ ещё должен его посмотреть. auto_metrics — неподтверждённые подсказки
+        (calibration), кладутся на submission; в тренды НЕ идут (см. Этап B)."""
+        _require_region()
+        meta = self.read_submission(submission_id)
+        meta["state"] = cfg.SUB_STATE_READY
+        meta["processed_at"] = _now_iso()
+        meta["updated_at"] = _now_iso()
+        if auto_metrics is not None:
+            meta["auto_metrics"] = auto_metrics
+        _write_json_0600(self._submission_file(submission_id), meta)
+        self._append_audit("mark_ready", submission_id=submission_id)
+
+    def mark_failed(self, submission_id: str, reason: str = "") -> None:
+        """Обработка не удалась: видео стираем (no-retention; родитель перезаливает)."""
+        _require_region()
+        meta = self.read_submission(submission_id)
+        self._purge_video_bytes(submission_id)
+        meta["state"] = cfg.SUB_STATE_FAILED
+        meta["video_purged"] = True
+        meta["failed_reason"] = (reason or "")[:200]
+        meta["purged_at"] = _now_iso()
+        meta["updated_at"] = _now_iso()
+        _write_json_0600(self._submission_file(submission_id), meta)
+        self._append_audit("mark_failed", submission_id=submission_id)
+
+    def reclaim_stuck_processing(self, now: datetime | None = None) -> int:
+        """Записи, зависшие в processing дольше MAX_PROCESSING_MINUTES (воркер умер /
+        редеплой), переводим в failed и стираем байты. Возвращает число вычищенных."""
+        _require_region()
+        if now is None:
+            now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(minutes=cfg.MAX_PROCESSING_MINUTES)
+        if not cfg.SUBMISSIONS_DIR.exists():
+            return 0
+        reclaimed = 0
+        for d in cfg.SUBMISSIONS_DIR.iterdir():
+            sf = d / "submission.json"
+            if not sf.is_file():
+                continue
+            try:
+                meta = _read_json(sf)
+            except Exception:
+                continue
+            if meta.get("state") != cfg.SUB_STATE_PROCESSING or meta.get("video_purged"):
+                continue
+            try:
+                started = datetime.fromisoformat(meta.get("processing_started_at", meta.get("created_at", "")))
+            except ValueError:
+                continue
+            if started < cutoff:
+                self.mark_failed(meta["submission_id"], reason="processing timed out")
+                reclaimed += 1
+        return reclaimed
 
 
 # ===========================================================================

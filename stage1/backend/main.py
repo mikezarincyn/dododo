@@ -6,6 +6,8 @@ P3 закладывает каркас: принудительный TLS/HSTS + 
 файловой системе или SDK провайдера в роутах быть не должно.
 """
 
+import asyncio
+import contextlib
 import re
 from pathlib import Path
 
@@ -27,6 +29,7 @@ import reset
 import sessions
 import stage1_config as cfg
 import users
+import worker
 from auth import Principal, resolve_principal
 from media_store import (
     AccessDeniedError,
@@ -222,6 +225,22 @@ def require_admin_user(request: Request) -> dict:
     return u
 
 
+@contextlib.asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Старт/стоп фонового воркера обработки видео (in-process). Под bare
+    TestClient lifespan не запускается — тесты гоняют обработку явно (worker.run_pending)."""
+    task = None
+    if cfg.WORKER_ENABLED:
+        task = asyncio.create_task(worker.worker_loop())
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+
 def create_app(*, enforce_https: bool | None = None) -> FastAPI:
     if enforce_https is None:
         enforce_https = cfg.ENFORCE_HTTPS
@@ -230,6 +249,7 @@ def create_app(*, enforce_https: bool | None = None) -> FastAPI:
         title="dododo Stage 1 (lean compliance)",
         description="Observations and feedback — НЕ медизделие, НЕ диагноз.",
         version="0.1.0",
+        lifespan=_lifespan,
     )
     install_security(app, enforce_https=enforce_https)
 

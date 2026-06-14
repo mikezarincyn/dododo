@@ -106,6 +106,36 @@ REMUX_TIMEOUT_SEC = int(os.environ.get("DODODO_REMUX_TIMEOUT_SEC", "120"))
 # ---------------------------------------------------------------------------
 ABANDONED_VIDEO_TTL_HOURS = int(os.environ.get("DODODO_ABANDONED_TTL_HOURS", str(7 * 24)))
 
+# ---------------------------------------------------------------------------
+# Жизненный цикл submission (асинхронная обработка фоновым воркером).
+# Видео загружается мгновенно (queued), фоновый воркер прогоняет его через
+# движок (processing), кладёт авто-метрики и помечает ready — только теперь
+# запись видна ОТ. ОТ открывает (in_review) → размечает (reviewed, видео стёрто).
+# Сбой обработки → failed (видео стёрто, родитель перезаливает).
+#   queued → processing → ready → in_review → reviewed
+#                      ↘ failed (видео стёрто)
+# no-retention неизменно: видео живёт от загрузки до конца разметки/сбоя, не дольше.
+# ---------------------------------------------------------------------------
+SUB_STATE_QUEUED = "queued"          # загружено, ждёт воркера
+SUB_STATE_PROCESSING = "processing"  # воркер прогоняет движок
+SUB_STATE_READY = "ready"            # метрики извлечены, ждёт ОТ
+SUB_STATE_IN_REVIEW = "in_review"    # ОТ открыл клип
+SUB_STATE_REVIEWED = "reviewed"      # размечено, видео стёрто
+SUB_STATE_FAILED = "failed"          # обработка не удалась, видео стёрто
+
+# Состояния, где сырое видео ещё существует (не стёрто) и запись «в работе».
+SUB_STATES_VIDEO_LIVE = (SUB_STATE_QUEUED, SUB_STATE_PROCESSING, SUB_STATE_READY, SUB_STATE_IN_REVIEW)
+# Состояния, в которых клип доступен ОТ для разметки (после обработки).
+SUB_STATES_AWAITING_REVIEW = (SUB_STATE_READY, SUB_STATE_IN_REVIEW)
+
+# Фоновый воркер (in-process, общий /tmp с веб-процессом — см. план async).
+# WORKER_ENABLED=0 выключает фоновый цикл (тесты гоняют обработку явно).
+WORKER_ENABLED = os.environ.get("DODODO_WORKER_ENABLED", "1") != "0"
+WORKER_POLL_SECONDS = int(os.environ.get("DODODO_WORKER_POLL_SECONDS", "5"))
+# Видео «зависло» в processing дольше этого (воркер умер / редеплой) → failed +
+# стереть байты. Сторож no-retention: ничего не доживает до долговременного хранения.
+MAX_PROCESSING_MINUTES = int(os.environ.get("DODODO_MAX_PROCESSING_MINUTES", "15"))
+
 # Срок хранения МЕТАДАННЫХ согласия (P5). Consent record переживает удаление видео.
 # TODO-LAWYER: определить срок хранения метаданных согласия (низкий риск, но число —
 # за юристом). При TBD (env не задан) число НЕ захардкоживается: consent record не

@@ -6,6 +6,7 @@ import json
 from fastapi.testclient import TestClient
 
 import stage1_config as cfg
+import worker
 from main import create_app
 
 REVIEWERS = {
@@ -42,6 +43,9 @@ def _upload(client, child_id, scenario="name"):
         data={"child_id": child_id, "scenario": scenario},
     )
     assert r.status_code == 200
+    # Async pipeline: drain the queue (fake worker, no ML) so the clip reaches
+    # `ready` — only then does it become visible to the OT.
+    worker.run_pending()
     return r.json()["submission_id"]
 
 

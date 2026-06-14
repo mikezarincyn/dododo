@@ -63,7 +63,7 @@ def test_upload_without_child_id_creates_pseudonym(client):
     assert r.status_code == 200
     meta = store.read_submission(r.json()["submission_id"])
     assert meta["display_code"].startswith("CH-")  # без свободного ввода имени
-    assert meta["state"] == "pending"
+    assert meta["state"] == "queued"  # загружено → ждёт фонового воркера
     assert meta["original_ext"] == ".webm"  # кламп по whitelist
 
 
