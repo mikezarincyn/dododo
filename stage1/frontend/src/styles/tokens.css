@@ -1,8 +1,48 @@
 /* dododo design-system токены — подмножество, перенесённое из
    design-system/project/tokens/* (значения verbatim). Источник DS не модифицируем;
    это копия для нового фронтенда (правило CLAUDE.md).
-   Шрифты: self-host .woff2 пока НЕ подключены (приватность — без Google Fonts CDN);
-   используем 'Poppins'/'Inter' с system-ui fallback. TODO: добавить @font-face. */
+   Шрифты: self-host .woff2 (latin-subset из @fontsource, лежат в ./fonts/).
+   Никакого Google Fonts CDN в рантайме — приватность (спец-категория данных). */
+
+/* --- Self-hosted brand fonts (Inter body, Poppins headings) ---
+   Файлы скачаны единожды из @fontsource (latin subset) и закоммичены в репо;
+   отдаются с нашего origin, без обращений к третьим сторонам. font-display:swap —
+   текст виден сразу системным шрифтом, затем подменяется брендовым. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/inter-latin-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/inter-latin-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/inter-latin-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Poppins";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/poppins-latin-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Poppins";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/poppins-latin-700.woff2") format("woff2");
+}
 
 :root {
   /* --- Brand greens --- */
@@ -74,6 +114,14 @@ body {
   color: var(--text-body);
   background: var(--surface-page);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Page shell: приложение занимает всю высоту экрана. DEMO-баннер сверху,
+   контент-колонка (Screen) растёт под ним. Колонку центрирует сам Screen. */
+#root {
+  min-block-size: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
 .ds-h2 {

@@ -38,6 +38,11 @@ export const en = {
       "Record or choose a short everyday moment. A specialist will review it and share observations and feedback.",
     chooseVideo: "Record or choose a video",
     contourAlt: "Outline showing where to place your child in the frame",
+    // P1: после съёмки/выбора показываем превью кадра, имя файла и статус отправки.
+    selectedVideo: "Selected video",
+    previewAlt: "Preview of the video you selected",
+    uploading: "Uploading your video…",
+    retry: "Choose another video",
     // Плашки доверия на экране загрузки (P2).
     trust: {
       liveSpecialist: "A real specialist will review your video",

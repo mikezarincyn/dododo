@@ -3,7 +3,8 @@ import { useState } from "react";
 import { Button } from "../components/ds/Button";
 import { Card } from "../components/ds/Card";
 import { Checkbox } from "../components/ds/Checkbox";
-import { getDir, t } from "../i18n";
+import { Screen } from "../components/ds/Screen";
+import { t } from "../i18n";
 import { postConsent, type ConsentResult } from "../api/client";
 import { REQUIRED_CHECKBOX_IDS } from "./consentConfig";
 import { allRequiredChecked } from "./consentGate";
@@ -44,10 +45,7 @@ export function ConsentScreen({
   }
 
   return (
-    <main
-      dir={getDir()}
-      style={{ maxWidth: 480, margin: "0 auto", padding: "var(--space-5)" }}
-    >
+    <Screen>
       <h1 className="ds-h2">{s.consent.title}</h1>
       <p className="ds-lead">{s.consent.intro}</p>
 
@@ -81,6 +79,6 @@ export function ConsentScreen({
       <p className="ds-small ds-muted" style={{ marginBlockStart: "var(--space-4)" }}>
         {s.consent.disclaimer}
       </p>
-    </main>
+    </Screen>
   );
 }
