@@ -4,9 +4,9 @@ import {
   Check, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, ClipboardList, Clock,
   Ear, Eye, Film, Gauge, Globe, Hand, Heart, HeartHandshake, Inbox, KeyRound,
   LayoutGrid, ListChecks, Lock, Mail, Megaphone, MessageCircle, MoreHorizontal,
-  MoveRight, PenLine, Play, Plus, Puzzle, Radio, RefreshCw, Send, Shield, ShieldAlert,
-  SkipBack, Sparkles, Sun, Timer, TrendingDown, TrendingUp, Unlock, Upload, UploadCloud,
-  UserPlus, Users, Utensils, X, Pause,
+  MoveRight, PenLine, PersonStanding, Play, Plus, Puzzle, Radio, RefreshCw, Send, Shield,
+  ShieldAlert, SkipBack, Sparkles, Sun, Timer, TrendingDown, TrendingUp, Unlock, Upload,
+  UploadCloud, UserPlus, Users, Utensils, X, Pause,
   type LucideIcon,
 } from "lucide-react";
 
@@ -50,6 +50,7 @@ const REGISTRY: Record<string, LucideIcon> = {
   "move-right": MoveRight,
   pause: Pause,
   "pen-line": PenLine,
+  "person-standing": PersonStanding,
   play: Play,
   plus: Plus,
   puzzle: Puzzle,

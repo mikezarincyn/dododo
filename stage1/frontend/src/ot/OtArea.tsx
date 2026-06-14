@@ -85,7 +85,7 @@ export function OtArea({
   if (screen === "annotate") {
     const item = queue.find((q) => q.submission_id === params.submissionId);
     if (!item) return <Queue t={t} go={go} mode="ot" items={queue} />;
-    return <Annotation t={t} go={go} item={item} loadVideo={api.loadVideo} annotate={(sid, payload) => api.annotate(sid, payload).then((o) => { refresh(); return o; })} toast={toast} />;
+    return <Annotation t={t} go={go} item={item} loadVideo={api.loadVideo} loadAnalysis={api.loadAnalysis} loadOverlay={api.loadOverlay} annotate={(sid, payload) => api.annotate(sid, payload).then((o) => { refresh(); return o; })} toast={toast} />;
   }
   if (screen === "progress") {
     const child = children.find((c) => c.child_id === childId) || { child_id: childId, display_code: "—" };

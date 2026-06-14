@@ -41,6 +41,34 @@ export interface Observation {
   domain_scores: Record<string, number>;
   created_at: string;
 }
+// Ephemeral analysis bundle (OT-only; lives only while the clip lives). Raw signal
+// as facts — graphs/events/transcript/latencies — never auto-judgments.
+export interface AnalysisSeries {
+  t: number[];
+  v: (number | null)[];
+  label?: string;
+}
+export interface AnalysisWord {
+  t: number;
+  end: number;
+  text: string;
+}
+export interface ChecklistHint {
+  value: string;
+  basis: string;
+}
+export interface AnalysisBundle {
+  version: number;
+  scenario: string;
+  fps: number | null;
+  duration_s: number | null;
+  coverage_pct: number | null;
+  series: { head_turn?: AnalysisSeries; hand_movement?: AnalysisSeries };
+  events: { calls: number[]; words: AnalysisWord[]; movement_peaks: number[] };
+  latencies: { call_t: number | null; latency_s: number | null }[];
+  checklist_hints: Record<string, ChecklistHint>;
+}
+
 export interface AnnotatePayload {
   scenario: string;
   domains: string[];
@@ -70,6 +98,8 @@ export interface OtApi {
   annotate(submissionId: string, payload: AnnotatePayload): Promise<Observation>;
   submitVideo(childId: string, scenario: string, file: File): Promise<{ submission_id: string }>;
   loadVideo(submissionId: string): Promise<Blob>;
+  loadAnalysis(submissionId: string): Promise<AnalysisBundle>;
+  loadOverlay(submissionId: string): Promise<Blob>;
 }
 
 export const otApi: OtApi = {
@@ -99,6 +129,14 @@ export const otApi: OtApi = {
   async loadVideo(submissionId) {
     const r = await fetch(`/api/ot/video/${submissionId}`, GET);
     if (!r.ok) throw new Error(`video ${r.status}`);
+    return await r.blob();
+  },
+  async loadAnalysis(submissionId) {
+    return ok<AnalysisBundle>(await fetch(`/api/ot/analysis/${submissionId}`, GET));
+  },
+  async loadOverlay(submissionId) {
+    const r = await fetch(`/api/ot/overlay/${submissionId}`, GET);
+    if (!r.ok) throw new Error(`overlay ${r.status}`);
     return await r.blob();
   },
 };

@@ -15,6 +15,8 @@ export { Badge } from "./Badge";
 export type { BadgeTone } from "./Badge";
 export { StatusBadge, CalBadge, ConfirmedBadge, TrendChip } from "./Chips";
 export { Spark } from "./Spark";
+export { SignalChart } from "./SignalChart";
+export type { ChartTrace, ChartMarker } from "./SignalChart";
 export { Avatar } from "./Avatar";
 export { ProgressBar } from "./ProgressBar";
 export type { ProgressStatus } from "./ProgressBar";
