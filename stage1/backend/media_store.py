@@ -983,6 +983,23 @@ class EphemeralMediaStore(MediaStore):
             "display_code": meta.get("display_code"),
         }
 
+    def decrypt_for_worker(self, submission_id: str) -> dict:
+        """Расшифровать байты видео для фоновой обработки. В отличие от
+        get_for_review: НЕ меняет state и НЕ «забирает» запись на reviewer —
+        это машинная обработка, а не просмотр специалистом. Видео не стирается
+        (остаётся для ОТ); удаление — на mark_reviewed_and_purge / mark_failed."""
+        _require_region()
+        meta = self.read_submission(submission_id)
+        if meta.get("video_purged"):
+            raise VideoUnavailableError(f"видео {submission_id} уже удалено")
+        enc_path = self._ephemeral_dir(submission_id) / _ENC_VIDEO_NAME
+        if not enc_path.exists():
+            raise VideoUnavailableError(f"байты видео {submission_id} отсутствуют")
+        blob = enc_path.read_bytes()
+        plaintext = crypto.decrypt(blob, submission_id.encode("ascii"))
+        self._append_audit("worker_decrypt", submission_id=submission_id)
+        return {"video_bytes": plaintext, "original_ext": meta.get("original_ext")}
+
     # ------------------------------------------------------------------
     def assign_reviewer(self, submission_id: str, reviewer_actor: str, by_actor: str) -> None:
         """admin назначает запись конкретному reviewer (need-to-know)."""

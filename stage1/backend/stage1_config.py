@@ -136,6 +136,18 @@ WORKER_POLL_SECONDS = int(os.environ.get("DODODO_WORKER_POLL_SECONDS", "5"))
 # стереть байты. Сторож no-retention: ничего не доживает до долговременного хранения.
 MAX_PROCESSING_MINUTES = int(os.environ.get("DODODO_MAX_PROCESSING_MINUTES", "15"))
 
+# Реальный движок (Этап B): воркер вызывает корневой engine.py через subprocess
+# (worker_runner.py). WORKER_USE_ENGINE=0 → заглушка (Этап A / тесты без ML).
+WORKER_USE_ENGINE = os.environ.get("DODODO_WORKER_USE_ENGINE", "1") != "0"
+# Жёсткий потолок на один прогон движка (CPU-bound; защита от зависания).
+WORKER_JOB_TIMEOUT_SEC = int(os.environ.get("DODODO_WORKER_JOB_TIMEOUT_SEC", "600"))
+# Где лежат корневой engine.py + config.py + модель-файлы (COPY в образ воркера).
+# В Docker задаётся DODODO_ENGINE_ROOT=/app/engine; локально — корень репозитория.
+ENGINE_ROOT = os.environ.get(
+    "DODODO_ENGINE_ROOT",
+    str(Path(__file__).resolve().parent.parent.parent),
+)
+
 # Срок хранения МЕТАДАННЫХ согласия (P5). Consent record переживает удаление видео.
 # TODO-LAWYER: определить срок хранения метаданных согласия (низкий риск, но число —
 # за юристом). При TBD (env не задан) число НЕ захардкоживается: consent record не

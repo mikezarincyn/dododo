@@ -16,17 +16,65 @@
 """
 
 import asyncio
+import json
 import logging
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
 
 import media_store
 import stage1_config as cfg
 
 log = logging.getLogger("dododo.worker")
 
+_RUNNER = str(Path(__file__).resolve().parent / "worker_runner.py")
+
 
 def fake_job(store, submission_id: str) -> None:
     """Этап A: без движка. Реальная обработка приходит в Этапе B (worker_runner)."""
     return None
+
+
+def engine_job(store, submission_id: str) -> list:
+    """Этап B: прогнать клип корневым движком в подпроцессе и вернуть
+    НЕПОДТВЕРЖДЁННЫЕ (calibration) авто-метрики.
+
+    no-retention: расшифрованный клип и ВСЕ производные движка (overlay, csv,
+    meta, wav, whisper-temp) живут в одном workdir под /tmp и стираются в finally.
+    Сам зашифрованный клип НЕ трогаем — он нужен ОТ для просмотра; стирается
+    после разметки (mark_reviewed_and_purge) или при сбое (mark_failed)."""
+    meta = store.read_submission(submission_id)
+    scenario = meta.get("scenario") or "name"
+    payload = store.decrypt_for_worker(submission_id)
+    ext = payload.get("original_ext") or ".mp4"
+
+    workdir = Path(tempfile.mkdtemp(prefix="dododo_proc_"))
+    try:
+        video_path = workdir / f"input{ext}"
+        video_path.write_bytes(payload["video_bytes"])
+        # Освобождаем расшифрованные байты из памяти как можно раньше.
+        del payload
+
+        env = dict(os.environ)
+        env["DODODO_ENGINE_ROOT"] = cfg.ENGINE_ROOT
+        # Любые временные файлы движка (wav, whisper) — внутрь workdir.
+        env["TMPDIR"] = env["TEMP"] = env["TMP"] = str(workdir)
+
+        proc = subprocess.run(
+            [sys.executable, _RUNNER, str(video_path), scenario, str(workdir)],
+            capture_output=True, text=True,
+            timeout=cfg.WORKER_JOB_TIMEOUT_SEC, env=env,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(f"worker_runner rc={proc.returncode}: {proc.stderr[-500:]}")
+        line = (proc.stdout or "").strip().splitlines()[-1] if proc.stdout.strip() else "{}"
+        return json.loads(line).get("auto_metrics", [])
+    finally:
+        # no-retention: стереть расшифрованный клип + все деривативы движка.
+        shutil.rmtree(workdir, ignore_errors=True)
 
 
 def process_submission(store, submission_id: str, *, job=None) -> str:
@@ -71,10 +119,17 @@ def sweep(store=None) -> dict:
     return {"reclaimed": reclaimed, "abandoned": abandoned}
 
 
+def default_job():
+    """Реальный движок в проде (Этап B), заглушка — когда движок выключен."""
+    return engine_job if cfg.WORKER_USE_ENGINE else fake_job
+
+
 async def worker_loop(*, job=None, poll_seconds: int | None = None) -> None:
     """Фоновый цикл: периодически чистит сторожами и сливает очередь. CPU-bound
     job (Этап B) исполняется в треде, чтобы не блокировать event loop."""
     poll = poll_seconds or cfg.WORKER_POLL_SECONDS
+    if job is None:
+        job = default_job()
     log.info("video worker started (poll=%ss)", poll)
     try:
         while True:

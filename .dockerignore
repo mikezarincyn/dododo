@@ -1,0 +1,44 @@
+# Build context = repo root (see stage1/Dockerfile). Keep PII, big artifacts and
+# dev cruft OUT of the image/context. Only stage1/ + engine.py/config.py/*.task
+# are actually COPY'd; everything else here is excluded for safety + speed.
+
+# Real child data + derivatives — NEVER in an image.
+data/
+demo_clips/
+
+# Python / virtualenv / caches
+venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Node / frontend build (frontend is rebuilt inside the image)
+**/node_modules/
+stage1/frontend/dist/
+
+# Git + tooling + agent state
+.git/
+.github/
+.claude/
+.streamlit/secrets.toml
+
+# Design-system handoff bundle (not needed at runtime)
+design-system/
+
+# Media / orphan artifacts
+*.mp4
+*.mov
+*.MOV
+*.avi
+*.mkv
+*.wav
+*.png
+
+# OS cruft
+.DS_Store
+
+# Streamlit engine app (not used by stage1 runtime; engine.py/config.py copied explicitly)
+app.py
+storage.py
+tests/

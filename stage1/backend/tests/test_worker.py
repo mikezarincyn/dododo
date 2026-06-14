@@ -4,7 +4,10 @@ queued → processing → ready → (разметка ОТ) → reviewed; вет
 Видео живёт ровно до конца обработки+разметки; стирается при failed/abandon/reclaim.
 Реальный движок появится в Этапе B (здесь job — заглушка / искусственный сбой)."""
 
+import json
+import types
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 from conftest import VALID_CONSENT
@@ -17,6 +20,21 @@ PLAINTEXT = b"VID-" + b"w" * 300
 
 def _new(store):
     return store.put(PLAINTEXT, dict(VALID_CONSENT))
+
+
+def _fake_runner(monkeypatch, *, returncode=0, auto_metrics=None, capture=None):
+    """Подменить subprocess.run воркера: имитируем worker_runner без ML.
+    capture (dict) получает workdir, чтобы проверить очистку no-retention."""
+    payload = {"auto_metrics": auto_metrics or [], "diag": {}}
+
+    def fake_run(cmd, **kwargs):
+        if capture is not None:
+            capture["video_path"] = cmd[2]
+            capture["workdir"] = cmd[4]
+        out = json.dumps(payload) if returncode == 0 else ""
+        return types.SimpleNamespace(returncode=returncode, stdout=out, stderr="boom")
+
+    monkeypatch.setattr(worker.subprocess, "run", fake_run)
 
 
 # ---------- happy path: queued → processing → ready ----------
@@ -130,3 +148,56 @@ def test_sweep_reports_counts(store):
 @pytest.mark.parametrize("state_attr", ["SUB_STATE_QUEUED", "SUB_STATE_READY", "SUB_STATE_FAILED"])
 def test_state_constants_exist(state_attr):
     assert isinstance(getattr(cfg, state_attr), str)
+
+
+# ---------- Этап B: engine_job (движок мокнут — оркестрация + no-retention) ----------
+
+AUTO = [
+    {"label": "Overall movement activity (auto)", "value": "0.123", "state": "calibration", "domains": ["movement"]},
+    {"label": "Response to name (auto)", "value": "1/2 calls", "state": "calibration", "domains": ["attention"]},
+]
+
+
+def test_engine_job_returns_metrics_and_cleans_workdir(store, monkeypatch):
+    sid = _new(store)
+    cap = {}
+    _fake_runner(monkeypatch, auto_metrics=AUTO, capture=cap)
+
+    metrics = worker.engine_job(store, sid)
+    assert metrics == AUTO
+    # Расшифрованный клип + деривативы движка стёрты (no-retention).
+    assert not Path(cap["workdir"]).exists()
+    # Сам зашифрованный клип сохранён — он нужен ОТ для просмотра.
+    assert store._ephemeral_dir(sid).exists()
+    assert store.read_submission(sid).get("video_purged") is False
+
+
+def test_engine_job_via_run_pending_marks_ready_with_auto_metrics(store, monkeypatch):
+    sid = _new(store)
+    _fake_runner(monkeypatch, auto_metrics=AUTO)
+
+    n = worker.run_pending(store, job=worker.engine_job)
+    assert n == 1
+    meta = store.read_submission(sid)
+    assert meta["state"] == cfg.SUB_STATE_READY
+    # Авто-метрики легли на submission НЕПОДТВЕРЖДЁННЫМИ (calibration).
+    assert meta["auto_metrics"] == AUTO
+    assert all(m["state"] == cfg.METRIC_STATE_CALIBRATION for m in meta["auto_metrics"])
+
+
+def test_engine_job_failure_purges_video(store, monkeypatch):
+    sid = _new(store)
+    _fake_runner(monkeypatch, returncode=1)
+
+    n = worker.run_pending(store, job=worker.engine_job)
+    assert n == 1
+    meta = store.read_submission(sid)
+    assert meta["state"] == cfg.SUB_STATE_FAILED and meta["video_purged"] is True
+    assert not store._ephemeral_dir(sid).exists()
+
+
+def test_default_job_respects_use_engine_flag(monkeypatch):
+    monkeypatch.setattr(cfg, "WORKER_USE_ENGINE", True, raising=False)
+    assert worker.default_job() is worker.engine_job
+    monkeypatch.setattr(cfg, "WORKER_USE_ENGINE", False, raising=False)
+    assert worker.default_job() is worker.fake_job

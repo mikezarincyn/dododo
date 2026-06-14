@@ -1,0 +1,15 @@
+# Тяжёлые ML-зависимости ТОЛЬКО для фонового воркера (Этап B): корневой engine.py
+# вызывается как библиотека из worker_runner.py (подпроцесс). Веб-процесс их не
+# импортирует — но образ один (in-process воркер), поэтому ставим в тот же runtime.
+#
+# ВНИМАНИЕ по версиям: корневой requirements.txt пинит mediapipe==0.10.35 (это
+# macOS-колесо локального дева). Под Linux x86_64 (образ python:3.12-slim) на PyPI
+# доступно максимум 0.10.18 — пиним его. API vision.PoseLandmarker/FaceLandmarker
+# стабилен в 0.10.x, модель-файлы .task совместимы. numpy тянется транзитивно с
+# mediapipe (она же ограничивает верхнюю границу), поэтому отдельно НЕ пиним, чтобы
+# не словить конфликт; scipy нужен engine.analyze_audio (find_peaks/wavfile).
+# opencv приходит транзитивно с mediapipe (headless/contrib). streamlit/matplotlib
+# НЕ нужны — это движок обработки, не Streamlit-UI.
+mediapipe==0.10.18
+scipy
+faster-whisper==1.2.1
