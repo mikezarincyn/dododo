@@ -1,152 +1,246 @@
-/* dododo design-system токены — подмножество, перенесённое из
-   design-system/project/tokens/* (значения verbatim). Источник DS не модифицируем;
-   это копия для нового фронтенда (правило CLAUDE.md).
-   Шрифты: self-host .woff2 (latin-subset из @fontsource, лежат в ./fonts/).
-   Никакого Google Fonts CDN в рантайме — приватность (спец-категория данных). */
+/* dododo design-system — tokens + base, ported verbatim from the Claude Design
+   handoff bundle (_ds/tokens/{colors,typography,spacing}.css + base.css).
+   Source bundle is not modified; this is the stage1 React copy (CLAUDE.md rule).
 
-/* --- Self-hosted brand fonts (Inter body, Poppins headings) ---
-   Файлы скачаны единожды из @fontsource (latin subset) и закоммичены в репо;
-   отдаются с нашего origin, без обращений к третьим сторонам. font-display:swap —
-   текст виден сразу системным шрифтом, затем подменяется брендовым. */
-@font-face {
-  font-family: "Inter";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("./fonts/inter-latin-400.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Inter";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("./fonts/inter-latin-600.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Inter";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("./fonts/inter-latin-700.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Poppins";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("./fonts/poppins-latin-600.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Poppins";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("./fonts/poppins-latin-700.woff2") format("woff2");
-}
+   Fonts: self-hosted .woff2 (latin subset from @fontsource) in ./fonts/.
+   NO Google Fonts CDN at runtime — privacy (special-category data). The design's
+   fonts.css uses an @import CDN; we deliberately replace it with @font-face. */
+
+/* ============================================================
+   SELF-HOSTED BRAND FONTS — Inter (body/UI) + Poppins (headings)
+   Weights match the design: 400/500/600/700 both families.
+   Poppins 400 is needed for the two-tone heading (base 400 + <strong> 700).
+   font-display: swap — text shows immediately, then swaps to brand font.
+   ============================================================ */
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap; src: url("./fonts/inter-latin-400.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 500; font-display: swap; src: url("./fonts/inter-latin-500.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap; src: url("./fonts/inter-latin-600.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 700; font-display: swap; src: url("./fonts/inter-latin-700.woff2") format("woff2"); }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 400; font-display: swap; src: url("./fonts/poppins-latin-400.woff2") format("woff2"); }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 500; font-display: swap; src: url("./fonts/poppins-latin-500.woff2") format("woff2"); }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 600; font-display: swap; src: url("./fonts/poppins-latin-600.woff2") format("woff2"); }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 700; font-display: swap; src: url("./fonts/poppins-latin-700.woff2") format("woff2"); }
 
 :root {
-  /* --- Brand greens --- */
-  --green-500: #72bca1;
-  --green-400: #89ccb3;
-  --green-100: #dcf3ea;
+  /* ---- Brand greens (primary action) ---- */
+  --green-500: #72bca1;   /* primary brand / CTA */
+  --green-400: #89ccb3;   /* primary hover (lighter) */
+  --green-100: #dcf3ea;   /* soft pill button surface */
+  --green-ink: #2f8a6b;   /* readable green text on light surfaces */
+
+  /* ---- Secondary teal-blue ---- */
   --teal-500: #58b4b7;
+  --teal-400: #6fc4c9;
+
+  /* ---- Navy (headings / trust) ---- */
   --navy-700: #0d3276;
+
+  /* ---- Ink / neutrals ---- */
   --ink-900: #2b2a2a;
-  --white: #ffffff;
-  --coral-500: #ee6c4d;
-  --lilac-100: #eceafb;
+  --white:   #ffffff;
+
+  /* ---- Warm surfaces ---- */
   --yellow-surface-100: #fff8e4;
-  --grey-surface-100: #f4f5f6;
+  --yellow-surface-200: #ffefcc;
+  --yellow-ink:         #9a7b23;   /* readable text on yellow surface */
+  --grey-surface-100:   #f4f5f6;
 
-  /* --- Semantic --- */
+  /* ---- Confetti accents (from logo) ---- */
+  --confetti-yellow: #ffd983;
+  --confetti-pink:   #efcfc9;
+  --confetti-blue:   #d0effb;
+
+  /* ---- Extended accents ---- */
+  --coral-500: #ee6c4d;
+  --blush-100: #f9d7db;
+  --lilac-100: #eceafb;
+
+  /* ============================================================
+     SEMANTIC ALIASES
+     ============================================================ */
+  /* Text */
   --text-heading: var(--navy-700);
-  --text-body: var(--ink-900);
-  --text-muted: rgba(43, 42, 42, 0.65);
-  --surface-page: var(--white);
-  --action-primary: var(--green-500);
-  --action-primary-hover: var(--green-400);
-  --border-subtle: rgba(13, 50, 118, 0.1);
+  --text-body:    var(--ink-900);
+  --text-muted:   rgba(43, 42, 42, 0.65);
+  --text-subtle:  rgba(43, 42, 42, 0.50);
+  --text-on-green:var(--white);
+  --text-on-navy: var(--white);
+  --text-link:    var(--navy-700);
 
-  /* --- Typography --- */
+  /* Surfaces */
+  --surface-page:        var(--white);
+  --surface-card:        var(--white);
+  --surface-soft-green:  var(--green-100);
+  --surface-soft-yellow: var(--yellow-surface-100);
+  --surface-soft-grey:   var(--grey-surface-100);
+  --surface-blush:       var(--blush-100);
+  --surface-brand-green: var(--green-500);
+
+  /* Actions */
+  --action-primary:         var(--green-500);
+  --action-primary-hover:   var(--green-400);
+  --action-secondary:       var(--teal-500);
+  --action-secondary-hover: var(--teal-400);
+  --action-pill-soft:       var(--green-100);
+
+  /* Borders */
+  --border-subtle: rgba(13, 50, 118, 0.10);
+  --border-strong: var(--ink-900);
+  --border-green:  var(--green-500);
+
+  /* Status / progress (development bands) */
+  --status-typical:  var(--green-500);
+  --status-building: var(--teal-500);
+  --status-emerging: var(--confetti-yellow);
+  --status-watch:    var(--coral-500);
+
+  /* ============================================================
+     TYPOGRAPHY
+     ============================================================ */
   --font-heading: "Poppins", system-ui, -apple-system, sans-serif;
-  --font-body: "Inter", system-ui, -apple-system, sans-serif;
-  --font-h2: 32px;
-  --font-h3: 24px;
-  --font-body-lg: 18px;
-  --font-body-size: 18px;
-  --font-small: 15px;
-  --font-button: 17px;
-  --lh-body: 1.5;
-  --lh-snug: 1.2;
+  --font-body:    "Inter", system-ui, -apple-system, sans-serif;
 
-  /* --- Spacing (4px grid) --- */
+  --weight-regular: 400;
+  --weight-medium:  500;
+  --weight-semibold:600;
+  --weight-bold:    700;
+
+  /* Type scale (desktop). NB: we do NOT redefine --font-body as a size — the
+     design's typography.css clobbers the family with 18px; we keep family. */
+  --font-h1: 80px;
+  --font-h2: 48px;
+  --font-h3: 32px;
+  --font-h4: 24px;
+  --font-big: 30px;
+  --font-body-lg: 22px;
+  --font-body-size: 18px;
+  --font-small: 17px;
+  --font-button: 17px;
+  --font-eyebrow: 17px;
+
+  --lh-tight:   1;
+  --lh-snug:    1.2;
+  --lh-heading: 1.33;
+  --lh-body:    1.5;
+
+  --ls-heading: 0.02em;
+  --ls-button:  0.05em;
+  --ls-eyebrow: 0.12em;
+
+  /* ============================================================
+     SPACING / RADII / SHADOWS
+     ============================================================ */
+  --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 24px;
   --space-6: 32px;
+  --space-7: 40px;
+  --space-8: 56px;
+  --space-9: 72px;
+  --space-10: 100px;
 
-  /* --- Radii / shadow --- */
-  --radius-md: 16px;
-  --radius-lg: 24px;
+  --section-pad-y:    100px;
+  --section-pad-y-sm: 40px;
+  --section-pad-x:    50px;
+  --section-pad-x-sm: 16px;
+
+  --radius-sm:   8px;
+  --radius-md:   16px;
+  --radius-lg:   24px;
+  --radius-xl:   32px;
   --radius-pill: 9999px;
-  --shadow-card: 0 8px 24px rgba(13, 50, 118, 0.08);
 
-  /* --- Buttons --- */
-  --btn-height: 56px;
-  --btn-pad-x: 32px;
+  --btn-height:    72px;
+  --btn-height-sm: 54px;
+  --btn-pad-x:     40px;
+
+  --shadow-card:  0 8px 24px rgba(13, 50, 118, 0.08);
+  --shadow-float: 0 16px 40px rgba(13, 50, 118, 0.12);
+  --shadow-pill:  0 4px 14px rgba(114, 188, 161, 0.30);
+
+  --border-width: 1.5px;
 }
 
-* {
-  box-sizing: border-box;
+/* ---- Mobile downscale (matches design) ---- */
+@media (max-width: 640px) {
+  :root {
+    --font-h1: 32px;
+    --font-h2: 32px;
+    --font-h3: 24px;
+    --font-body-lg: 18px;
+    --section-pad-y: var(--section-pad-y-sm);
+    --section-pad-x: var(--section-pad-x-sm);
+  }
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-}
+/* ============================================================
+   BASE ELEMENTS
+   ============================================================ */
+* { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; }
 
 body {
   font-family: var(--font-body);
-  font-size: var(--font-body-size);
+  font-size: 16px;
   line-height: var(--lh-body);
   color: var(--text-body);
   background: var(--surface-page);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Page shell: приложение занимает всю высоту экрана. DEMO-баннер сверху,
-   контент-колонка (Screen) растёт под ним. Колонку центрирует сам Screen. */
-#root {
-  min-block-size: 100dvh;
-  display: flex;
-  flex-direction: column;
-}
+button { font-family: var(--font-body); }
 
-.ds-h2 {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: var(--font-h2);
-  line-height: var(--lh-snug);
-  color: var(--text-heading);
-  margin: 0 0 var(--space-3);
-}
+/* App fills the viewport; chrome (DemoBanner/TopBar) on top, content grows. */
+#root { min-block-size: 100dvh; display: flex; flex-direction: column; }
 
-.ds-lead {
-  font-size: var(--font-body-lg);
-  color: var(--text-body);
-  margin: 0 0 var(--space-4);
-}
-
+/* ============================================================
+   TYPOGRAPHY HELPER CLASSES (from DS base.css)
+   ============================================================ */
 .ds-body {
-  font-size: var(--font-body-size);
+  font-family: var(--font-body);
+  font-size: var(--font-body-lg);
+  line-height: var(--lh-body);
+  color: var(--text-body);
 }
 
-.ds-small {
-  font-size: var(--font-small);
+.ds-h1, .ds-h2, .ds-h3, .ds-h4 {
+  font-family: var(--font-heading);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--ls-heading);
+  color: var(--text-heading);
+  text-wrap: balance;
+  margin: 0;
+}
+.ds-h1 { font-size: var(--font-h1); line-height: var(--lh-tight); }
+.ds-h2 { font-size: var(--font-h2); line-height: var(--lh-snug); }
+.ds-h3 { font-size: var(--font-h3); line-height: var(--lh-heading); }
+.ds-h4 { font-size: var(--font-h4); line-height: var(--lh-heading); }
+
+/* Two-tone heading: base weight 400, emphasised <strong> 700 */
+.ds-h1--twotone, .ds-h2--twotone { font-weight: var(--weight-regular); }
+.ds-h1--twotone strong, .ds-h2--twotone strong, .ds-emph {
+  font-weight: var(--weight-bold);
+  font-style: normal;
 }
 
-.ds-muted {
-  color: var(--text-muted);
+.ds-highlight {
+  background: linear-gradient(transparent 55%, var(--confetti-blue) 55%);
+  padding: 0 0.05em;
+}
+
+.ds-lead  { font-size: var(--font-body-lg); line-height: var(--lh-body); color: var(--text-body); }
+.ds-muted { color: var(--text-muted); }
+.ds-small { font-size: var(--font-small); }
+
+.ds-eyebrow {
+  font-family: var(--font-body);
+  font-weight: var(--weight-bold);
+  font-size: var(--font-eyebrow);
+  letter-spacing: var(--ls-eyebrow);
+  text-transform: uppercase;
+  color: var(--text-heading);
 }

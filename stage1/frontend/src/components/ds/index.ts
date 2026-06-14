@@ -1,0 +1,31 @@
+// Barrel for the dododo design-system primitives (stage1 React port of the
+// Claude Design bundle). Import from "../components/ds" in screens.
+export { Button } from "./Button";
+export type { ButtonVariant, ButtonSize } from "./Button";
+export { Card } from "./Card";
+export type { CardTone } from "./Card";
+export { Input } from "./Input";
+export { TextArea } from "./TextArea";
+export { Select } from "./Select";
+export type { SelectOption } from "./Select";
+export { Segmented } from "./Segmented";
+export type { SegmentedOption } from "./Segmented";
+export { Checkbox } from "./Checkbox";
+export { Badge } from "./Badge";
+export type { BadgeTone } from "./Badge";
+export { StatusBadge, CalBadge, ConfirmedBadge, TrendChip } from "./Chips";
+export { Spark } from "./Spark";
+export { Avatar } from "./Avatar";
+export { ProgressBar } from "./ProgressBar";
+export type { ProgressStatus } from "./ProgressBar";
+export { VideoFrame } from "./VideoFrame";
+export { useToast, ToastView } from "./Toast";
+export { PageHead, TwoTone } from "./PageHead";
+export { Logo } from "./Logo";
+export { ConfettiBurst } from "./ConfettiBurst";
+export type { ConfettiPiece } from "./ConfettiBurst";
+export { LangSwitcher } from "./LangSwitcher";
+export { Shell, TopBar } from "./Shell";
+export type { NavItem } from "./Shell";
+export { Icon, Ico } from "./Icon";
+export { Screen } from "./Screen";

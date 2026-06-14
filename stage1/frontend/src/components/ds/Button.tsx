@@ -1,29 +1,30 @@
 import type { CSSProperties, ReactNode } from "react";
 
-type Variant = "primary" | "secondary" | "outline" | "soft";
+export type ButtonVariant = "primary" | "secondary" | "outline" | "soft";
+export type ButtonSize = "sm" | "md";
 
-const VARIANTS: Record<Variant, CSSProperties> = {
-  primary: { background: "var(--green-500)", color: "var(--white)" },
-  secondary: { background: "var(--teal-500)", color: "var(--white)" },
-  outline: {
-    background: "transparent",
-    color: "var(--ink-900)",
-    border: "1.5px solid var(--ink-900)",
-  },
-  soft: { background: "var(--green-100)", color: "var(--green-500)" },
-};
-
+// DS pill button. Visual ported from the design bundle's Button (primary /
+// secondary / outline / soft; sm / md). Styling lives in app.css (.ds-btn*) so
+// hover states work; `style` still overrides per-call (the screens lean on this).
 export function Button({
   children,
   variant = "primary",
+  size = "md",
   disabled = false,
   onClick,
+  iconRight,
+  title,
+  className,
   style,
 }: {
   children: ReactNode;
-  variant?: Variant;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
   disabled?: boolean;
   onClick?: () => void;
+  iconRight?: ReactNode;
+  title?: string;
+  className?: string;
   style?: CSSProperties;
 }) {
   return (
@@ -31,21 +32,12 @@ export function Button({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      style={{
-        fontFamily: "var(--font-body)",
-        fontWeight: 600,
-        fontSize: "var(--font-button)",
-        blockSize: "var(--btn-height)",
-        paddingInline: "var(--btn-pad-x)",
-        borderRadius: "var(--radius-pill)",
-        border: "none",
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.45 : 1,
-        ...VARIANTS[variant],
-        ...style,
-      }}
+      title={title}
+      className={["ds-btn", `ds-btn--${variant}`, `ds-btn--${size}`, className].filter(Boolean).join(" ")}
+      style={style}
     >
       {children}
+      {iconRight}
     </button>
   );
 }
