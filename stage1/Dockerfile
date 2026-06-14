@@ -18,6 +18,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 WORKDIR /app/backend
 
+# ffmpeg — для серверной нормализации контейнера (remux, НЕ сжатие): браузерная
+# запись (MediaRecorder) даёт fragmented mp4 / webm, который движок-OpenCV не
+# всегда открывает; remux `-c copy +faststart` чинит это без потери сигнала.
+# Никакого ML тут нет (mediapipe/opencv не ставим) — только ffmpeg-бинарь.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 # Только лёгкие зависимости Стадии 1 (FastAPI/uvicorn/cryptography/multipart),
 # НЕ корневой requirements.txt с тяжёлым ML.
 COPY backend/requirements.txt ./requirements.txt

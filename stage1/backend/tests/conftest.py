@@ -36,6 +36,11 @@ def sandbox(monkeypatch, tmp_path):
     # Фиксированный ключ AES-256 — round-trip детерминирован (nonce всё равно случаен).
     monkeypatch.setenv(cfg.MEDIA_KEY_ENV, base64.b64encode(bytes(range(32))).decode())
 
+    # Remux по умолчанию выключен в тестах: песочница не зависит от ffmpeg и
+    # хранит байты как есть (как было до Этапа upload). Тест video_norm включает
+    # его сам, чтобы проверить fail-open/очистку temp.
+    monkeypatch.setattr(cfg, "REMUX_DISABLE", True, raising=False)
+
     # Сброс синглтона фасада, чтобы новый стор увидел пропатченные пути.
     monkeypatch.setattr(media_store, "_default_store", None, raising=False)
 

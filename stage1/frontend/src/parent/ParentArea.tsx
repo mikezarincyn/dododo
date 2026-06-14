@@ -87,8 +87,8 @@ export function ParentArea({
         go={go}
         mode="parent"
         childOptions={children.map((c) => ({ value: c.child_id, label: `${c.first_name} · ${c.display_code}` }))}
-        upload={(cid, scenario, file) => api.submitVideo(cid, scenario, file).then((r) => { refreshSubmissions(); return r; })}
         toast={toast}
+        onUploaded={refreshSubmissions}
       />
     );
   }

@@ -80,8 +80,8 @@ export function OtArea({
         go={go}
         mode="ot"
         childOptions={children.map((c) => ({ value: c.child_id, label: c.display_code }))}
-        upload={(cid, scenario, file) => api.submitVideo(cid, scenario, file).then((r) => { refresh(); return r; })}
         toast={toast}
+        onUploaded={refresh}
       />
     );
   }

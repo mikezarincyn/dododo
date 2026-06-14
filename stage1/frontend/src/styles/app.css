@@ -246,3 +246,23 @@
   .app-side { display: none; }
   .app-main { padding: 24px 18px 60px; }
 }
+
+/* ---------- mobile (phones) ---------- */
+@media (max-width: 640px) {
+  /* Top bar must never overflow / cause horizontal scroll. Drop the flex spacer,
+     allow wrapping, tighten padding. Logo + role chip + Demo badge stay; language
+     + Switch role wrap to a second row if needed. */
+  .app-topbar { flex-wrap: wrap; gap: 10px; padding: 12px 14px; }
+  .app-topbar .spacer { display: none; }
+  .app-main { padding: 18px 14px 64px; }
+  .app-main > .app-main-inner { max-width: 100%; }
+  /* Page header title + action stack instead of squeezing side by side. */
+  .page-head { flex-wrap: wrap; gap: 14px; }
+  .page-head .ds-h2 { font-size: 30px; }
+  .tile-grid { grid-template-columns: 1fr; }
+}
+
+/* Belt-and-suspenders: nothing should scroll the page sideways on mobile. */
+@media (max-width: 640px) {
+  html, body { overflow-x: hidden; }
+}

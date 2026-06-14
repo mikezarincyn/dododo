@@ -34,6 +34,7 @@ from pathlib import Path
 
 import crypto
 import stage1_config as cfg
+import video_norm
 
 # --- Имя зашифрованного видео внутри эфемерного каталога submission ---
 _ENC_VIDEO_NAME = "video.enc"
@@ -777,8 +778,14 @@ class EphemeralMediaStore(MediaStore):
         })
         _write_json_0600(self._consent_file(consent_id), consent_payload)
 
-        # Чтение видео + провенанс (sha256 вместо имени файла).
+        # Чтение видео + best-effort нормализация контейнера (remux, НЕ сжатие),
+        # чтобы движок-OpenCV открыл запись с любого телефона. Fail-open: при
+        # отсутствии ffmpeg/ошибке остаются исходные байты. Временные файлы remux
+        # удаляются внутри normalize (no-retention). sha256 — по СОХРАНЯЕМЫМ байтам.
         data = _read_stream_capped(video)
+        norm = video_norm.normalize(data, original_ext)
+        data = norm["bytes"]
+        original_ext = norm["ext"]
         import hashlib
         source_sha256 = hashlib.sha256(data).hexdigest()
         ext = _clamp_ext(original_ext)
@@ -794,6 +801,8 @@ class EphemeralMediaStore(MediaStore):
             "source_sha256": source_sha256,
             "original_ext": ext,
             "size_bytes": len(data),
+            "normalized": norm["normalized"],
+            "normalize_mode": norm["mode"],
             "region": cfg.PROVIDER_REGION,
             "compute": cfg.PROVIDER_COMPUTE,
             "video_purged": False,

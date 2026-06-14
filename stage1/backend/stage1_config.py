@@ -87,6 +87,17 @@ EPHEMERAL_MEDIA_ROOT = Path(
 ALLOWED_VIDEO_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm"}
 MAX_VIDEO_BYTES = int(os.environ.get("DODODO_MAX_VIDEO_BYTES", str(200 * 1024 * 1024)))
 
+# --- Серверная нормализация контейнера (remux, НЕ сжатие) ---
+# Браузерная запись (MediaRecorder) даёт фрагментированный mp4 / webm, который
+# OpenCV-движок не всегда открывает. После загрузки переупаковываем контейнер
+# (ffmpeg -c copy +faststart) — без перекодирования, без потери сигнала движения.
+# Vp8/Vp9 (Android без H.264) — вынужденный транскод в H.264 (единственная потеря).
+# Best-effort: при отсутствии ffmpeg или любой ошибке кладём ОРИГИНАЛ (загрузка
+# не падает из-за нормализации). Временные файлы всегда удаляются (no-retention).
+REMUX_DISABLE = os.environ.get("DODODO_REMUX_DISABLE") == "1"
+REMUX_FORCE_CFR = os.environ.get("DODODO_REMUX_FORCE_CFR") == "1"  # тайминг движка (ресемпл fps)
+REMUX_TIMEOUT_SEC = int(os.environ.get("DODODO_REMUX_TIMEOUT_SEC", "120"))
+
 # ---------------------------------------------------------------------------
 # TTL для непросмотренных (брошенных) загрузок — свипер реализуется в P5.
 # VIDEO_RETENTION=NONE: просмотренное видео удаляется немедленно (P5); брошенное —
