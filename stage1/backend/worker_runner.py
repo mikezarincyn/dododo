@@ -95,9 +95,9 @@ def build_auto_metrics(result, audio, call_times, lat):
                         "state": CALIBRATION, "domains": ["movement"]})
     det, tot = result.get("detected_frames"), result.get("total_frames")
     if tot:
-        metrics.append({"label": "Pose detected (auto)", "value": f"{det}/{tot} frames", "state": CALIBRATION})
+        metrics.append({"label": "Pose found (auto)", "value": f"{det}/{tot} frames", "state": CALIBRATION})
     if audio is not None:
-        metrics.append({"label": "Name calls detected (auto)", "value": str(len(call_times)),
+        metrics.append({"label": "Name calls found (auto)", "value": str(len(call_times)),
                         "state": CALIBRATION, "domains": ["communication"]})
     if lat is not None:
         metrics.append({"label": "Response to name (auto)", "value": f"{lat['responded']}/{lat['total']} calls",
@@ -144,13 +144,13 @@ def _checklist_hints(scenario, call_times, lat):
     first = next((r for r in results if r.get("latency_s") is not None), None)
     if (lat.get("responded") or 0) > 0 and first is not None:
         hints["turn"] = {"value": "yes",
-                         "basis": f"head-turn detected {float(first['latency_s']):.1f} s after a call"}
+                         "basis": f"head-turn observed {float(first['latency_s']):.1f} s after a call"}
         idx = results.index(first)
         if idx <= 2:  # пункт attempt предлагает только 1/2/3
             hints["attempt"] = {"value": str(idx + 1), "basis": f"first response on call #{idx + 1}"}
     else:
         hints["turn"] = {"value": "no",
-                         "basis": f"{len(call_times)} call(s) detected, no head-turn within the response window"}
+                         "basis": f"{len(call_times)} call(s) found, no head-turn observed in the timing window"}
         hints["attempt"] = {"value": "none", "basis": "no response detected to any call"}
     return hints
 
