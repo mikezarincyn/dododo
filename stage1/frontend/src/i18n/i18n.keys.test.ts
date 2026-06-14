@@ -42,7 +42,7 @@ const DYNAMIC_KEYS: string[] = [
   ...["improving", "steady", "declining"].map((x) => `trend.${x}`),
   ...["queued", "processing", "ready", "error", "inCalibration", "confirmed", "accepted", "sent"].map((x) => `status.${x}`),
   ...["ot", "parent", "clinic"].flatMap((r) => [`role.${r}`, `role.${r}.desc`]),
-  ...["received", "movement", "reactions", "specialist"].map((x) => `parent.safe.step.${x}`),
+  ...["received", "processing", "specialist"].map((x) => `parent.safe.step.${x}`),
   ...["good", "partial", "low"].map((x) => `parent.safe.quality.${x}`),
 ];
 

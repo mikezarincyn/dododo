@@ -7,13 +7,14 @@ import type { QueueRow } from "../ot/Queue";
 // child) + regularity. NEVER shows metrics, signal graphs, skeleton, latency, domain
 // scores, or any norm/not-norm interpretation — those are OT-only.
 
-const STEPS = ["received", "movement", "reactions", "specialist"] as const;
+// Neutral, technical steps about the VIDEO — never about analysing the child.
+const STEPS = ["received", "processing", "specialist"] as const;
 
 function reached(state: string): number {
   // How many journey steps are complete for this state.
   if (state === "queued") return 1;
-  if (state === "processing") return 1; // received done; movement/reactions in progress
-  if (state === "ready" || state === "in_review" || state === "reviewed") return 4;
+  if (state === "processing") return 1; // received done; processing in progress
+  if (state === "ready" || state === "in_review" || state === "reviewed") return 3;
   return 0; // failed / other
 }
 
@@ -42,7 +43,7 @@ export function ParentJourney({ t, item, ordinal }: { t: TFunc; item: QueueRow; 
           <div className="row" style={{ gap: 0, flexWrap: "wrap", alignItems: "flex-start" }}>
             {STEPS.map((step, i) => {
               const isDone = i < done;
-              const isActive = processing && i === 1; // "analysing" pulse during processing
+              const isActive = processing && i === 1; // processing-step pulse while working
               const color = isDone ? "var(--green-ink)" : isActive ? "var(--navy-700)" : "var(--text-subtle)";
               return (
                 <div key={step} className="col" style={{ alignItems: "center", flex: 1, minWidth: 72, gap: 6 }}>
@@ -65,7 +66,7 @@ export function ParentJourney({ t, item, ordinal }: { t: TFunc; item: QueueRow; 
               <Icon name="heart-handshake" size={15} color="var(--green-ink)" />
               <span>{t("parent.safe.reviewed")}</span>
             </div>
-          ) : done >= 4 ? (
+          ) : done >= 3 ? (
             <div className="row" style={{ gap: 8, marginTop: 14, color: "var(--green-ink)", fontSize: 13.5 }}>
               <Icon name="check" size={15} color="var(--green-ink)" />
               <span>{t("parent.safe.specialistHas")}</span>
@@ -75,7 +76,7 @@ export function ParentJourney({ t, item, ordinal }: { t: TFunc; item: QueueRow; 
           )}
 
           {/* neutral RECORDING-quality feedback (camera, not the child) */}
-          {rq && done >= 4 ? (
+          {rq && done >= 3 ? (
             <div className="row" style={{ gap: 8, marginTop: 12, alignItems: "flex-start", fontSize: 13, color: "var(--text-muted)" }}>
               <Icon name={rq === "good" ? "check" : "alert-triangle"} size={14} color={rq === "good" ? "var(--green-ink)" : "var(--yellow-ink)"} style={{ marginTop: 2 }} />
               <span>{t("parent.safe.quality." + rq)}</span>

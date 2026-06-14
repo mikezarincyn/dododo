@@ -39,7 +39,7 @@ export const LANGS: LangMeta[] = [
 
 export const STR: Record<Lang, Record<string, string>> = {
   "en": {
-    "brand.disclaimer": "Observation support & parent coaching tool. Not a medical device — never a substitute for in-person assessment.",
+    "brand.disclaimer": "Observation support & parent coaching tool. Not a medical device — never a substitute for evaluation by a qualified specialist.",
     "brand.demo": "Demo data",
     "common.loading": "Loading…",
     "nav.menu": "Menu",
@@ -230,7 +230,7 @@ export const STR: Record<Lang, Record<string, string>> = {
     "upload.guide.length": "Good length",
     "upload.queue.title.a": "Processing ",
     "upload.queue.title.b": "queue",
-    "upload.queue.sub": "Processing is asynchronous — you can leave this screen, we keep working.",
+    "upload.queue.sub": "Processing is asynchronous — you can leave this page, we keep working.",
     "upload.queue.parentSub": "Processing is asynchronous — once a clip is ready, your therapist sees it automatically.",
     "upload.queue.annotate": "Annotate now",
     "upload.queue.retry": "Retry upload",
@@ -289,11 +289,10 @@ export const STR: Record<Lang, Record<string, string>> = {
     "parent.safe.observation": "Observation",
     "parent.safe.failed": "We couldn’t process this one — please upload it again.",
     "parent.safe.step.received": "Video received",
-    "parent.safe.step.movement": "Analysing movement",
-    "parent.safe.step.reactions": "Analysing reactions",
-    "parent.safe.step.specialist": "Specialist has it",
-    "parent.safe.reviewed": "Your specialist has reviewed this observation.",
-    "parent.safe.specialistHas": "Your specialist has the material to review.",
+    "parent.safe.step.processing": "Processing your video",
+    "parent.safe.step.specialist": "Therapist has it",
+    "parent.safe.reviewed": "Your therapist has reviewed this observation.",
+    "parent.safe.specialistHas": "Your therapist has the material to review.",
     "parent.safe.processingNote": "We’ll let you know when it’s ready — this usually takes a moment.",
     "parent.safe.quality.good": "Great recording — your child was in frame the whole time.",
     "parent.safe.quality.partial": "Partly in frame — next time try to fit your child fully in the frame.",
@@ -338,7 +337,7 @@ export const STR: Record<Lang, Record<string, string>> = {
     "sys.bg.loggedChip": "logged"
   },
   "de": {
-    "brand.disclaimer": "Werkzeug für Beobachtung & Eltern-Coaching. Kein Medizinprodukt — niemals ein Ersatz für eine persönliche Einschätzung.",
+    "brand.disclaimer": "Werkzeug für Beobachtung & Eltern-Coaching. Kein Medizinprodukt — niemals ein Ersatz für eine Beurteilung durch eine qualifizierte Fachkraft.",
     "brand.demo": "Demodaten",
     "switcher.eyebrow": "INTERAKTIVE DEMO",
     "switcher.title.a": "Wähle eine Rolle und ",
@@ -675,7 +674,7 @@ export const STR: Record<Lang, Record<string, string>> = {
     "Pick a scenario above to see its filming guide.": "Wähle oben ein Szenario, um den Dreh-Leitfaden zu sehen."
   },
   "ar": {
-    "brand.disclaimer": "أداة لدعم الملاحظة وتوجيه الوالدين. ليست جهازًا طبيًا — وليست بديلاً عن التقييم الشخصي.",
+    "brand.disclaimer": "أداة لدعم الملاحظة وتوجيه الوالدين. ليست جهازًا طبيًا — وليست بديلاً عن تقييم أخصائي مؤهل.",
     "brand.demo": "بيانات تجريبية",
     "switcher.eyebrow": "عرض تفاعلي",
     "switcher.title.a": "اختر دورًا ",
@@ -1012,7 +1011,7 @@ export const STR: Record<Lang, Record<string, string>> = {
     "Pick a scenario above to see its filming guide.": "اختر سيناريو أعلاه لعرض دليل التصوير."
   },
   "ko": {
-    "brand.disclaimer": "관찰 지원 및 부모 코칭 도구입니다. 의료기기가 아니며 대면 평가를 대체하지 않습니다.",
+    "brand.disclaimer": "관찰 지원 및 부모 코칭 도구입니다. 의료기기가 아니며 자격을 갖춘 전문가의 평가를 대체하지 않습니다.",
     "brand.demo": "데모 데이터",
     "switcher.eyebrow": "인터랙티브 데모",
     "switcher.title.a": "역할을 선택해 ",
