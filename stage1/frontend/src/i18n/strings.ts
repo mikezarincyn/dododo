@@ -42,6 +42,7 @@ export const STR: Record<Lang, Record<string, string>> = {
     "brand.disclaimer": "Observation support & parent coaching tool. Not a medical device — never a substitute for in-person assessment.",
     "brand.demo": "Demo data",
     "common.loading": "Loading…",
+    "nav.menu": "Menu",
     "console.signInTitle": "Specialist console",
     "console.signInIntro": "Sign in to review the children shared with you.",
     "console.accessToken": "Access token",

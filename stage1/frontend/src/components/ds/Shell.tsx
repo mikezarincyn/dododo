@@ -95,6 +95,17 @@ export function Shell({
           <div className="app-main-inner">{children}</div>
         </main>
       </div>
+
+      {/* Mobile navigation: the left rail is hidden ≤900px, so this bottom tab bar
+          becomes the navigation (thumb-friendly). Same items as the side nav. */}
+      <nav className="app-bottomnav" aria-label={t("nav.menu")}>
+        {nav.map((n) => (
+          <button key={n.id} type="button" className={"bottomnav-item" + (active === n.id ? " active" : "")} onClick={() => onNav(n.id)}>
+            <Icon name={n.icon} size={20} />
+            <span>{n.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
