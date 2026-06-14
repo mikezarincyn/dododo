@@ -35,10 +35,13 @@ describe("DesignApp role switcher", () => {
 });
 
 describe("i18n + RTL", () => {
-  it("falls back locale → en → key", () => {
+  it("falls back locale → en → humanized (structured) / passthrough (content)", () => {
     const t = makeT("de");
     expect(t("nav.children")).toBe("Meine Kinder"); // translated
-    expect(t("totally.unknown.key")).toBe("totally.unknown.key"); // passthrough
+    // Unknown CONTENT string (English-as-key, has spaces) is passed through unchanged.
+    expect(t("This phrase is absent from every dictionary")).toBe("This phrase is absent from every dictionary");
+    // Unknown STRUCTURED key must NOT leak as a raw "a.b.c" — it humanizes.
+    expect(t("totally.unknown.key")).toBe("Key");
   });
 
   it("marks Arabic as RTL and others LTR", () => {

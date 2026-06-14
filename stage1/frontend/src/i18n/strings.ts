@@ -41,6 +41,33 @@ export const STR: Record<Lang, Record<string, string>> = {
   "en": {
     "brand.disclaimer": "Observation support & parent coaching tool. Not a medical device — never a substitute for in-person assessment.",
     "brand.demo": "Demo data",
+    "common.loading": "Loading…",
+    "console.signInTitle": "Specialist console",
+    "console.signInIntro": "Sign in to review the children shared with you.",
+    "console.accessToken": "Access token",
+    "console.signIn": "Sign in",
+    "console.signInError": "That access token wasn't recognised. Check it and try again.",
+    "upload.record.title.a": "Record or ",
+    "upload.record.title.b": "upload a video",
+    "upload.record.now": "Record now",
+    "upload.record.recommended": "Recommended — film a short clip right here, with a guide frame.",
+    "upload.record.haveFile": "Upload a file you already have",
+    "upload.record.haveFileHint": "Choose a video from your phone or computer.",
+    "upload.record.unavailable": "Recording isn't available in this browser — open in Safari or Chrome, or upload a file.",
+    "record.placeChild": "Place your child inside the frame",
+    "record.start": "Start recording",
+    "record.stop": "Stop",
+    "record.retake": "Retake",
+    "record.use": "Use this video",
+    "record.cancel": "Cancel",
+    "record.cameraError": "We couldn't access the camera. Check permissions, or upload a file instead.",
+    "record.recommendedLength": "Recommended length",
+    "upload.uploading": "Uploading your video…",
+    "upload.uploadProgress": "Uploading… {pct}%",
+    "upload.uploadError": "Upload failed — check your connection and try again.",
+    "upload.retry": "Try again",
+    "upload.chooseAnother": "Choose another video",
+    "upload.keepOpen": "Keep this page open until the upload finishes.",
     "switcher.eyebrow": "INTERACTIVE DEMO",
     "switcher.title.a": "Choose a role to ",
     "switcher.title.b": "explore dododo",
@@ -1222,11 +1249,32 @@ export const STR: Record<Lang, Record<string, string>> = {
 
 export type TFunc = (key: string, vars?: Record<string, string | number>) => string;
 
-/** Build a translator for a locale. Falls back: locale → EN → key itself. */
+// A "structured" key is a dotted lowercase/camelCase identifier (e.g.
+// "console.signInTitle") — as opposed to an English content string used as its own
+// key (e.g. "No therapist yet"). If a structured key is ever missing from both the
+// locale AND EN, we must NOT show the raw "console.signInTitle" in the UI — that's
+// the prod bug. The "no missing i18n keys" test is the real gate; this is a
+// last-resort humanizer so a future slip degrades to readable text, not a key.
+const STRUCTURED_KEY = /^[A-Za-z0-9]+(\.[A-Za-z0-9]+)+$/;
+
+function humanizeKey(key: string): string {
+  const last = key.split(".").pop() || key;
+  const words = last
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** Build a translator for a locale. Falls back: locale → EN → (humanized last
+ *  segment for structured keys | the key itself for content strings). */
 export function makeT(lang: Lang): TFunc {
   const d = STR[lang] || STR.en;
   return (key, vars) => {
-    let s = d[key] !== undefined ? d[key] : STR.en[key] !== undefined ? STR.en[key] : key;
+    let s: string;
+    if (d[key] !== undefined) s = d[key];
+    else if (STR.en[key] !== undefined) s = STR.en[key];
+    else s = STRUCTURED_KEY.test(key) ? humanizeKey(key) : key;
     if (vars) for (const k of Object.keys(vars)) s = s.split("{" + k + "}").join(String(vars[k]));
     return s;
   };
