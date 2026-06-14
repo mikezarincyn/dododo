@@ -10,7 +10,7 @@ function StatusBadge({ t, status }: { t: TFunc; status: string }) {
 }
 
 // Inline "add a person" form (email + name + password [+ HCPC]).
-function CreateForm({ t, withHcpc, submitLabel, onSubmit }: { t: TFunc; withHcpc?: boolean; submitLabel: string; onSubmit: (email: string, password: string, name: string, hcpc?: string) => Promise<void> }) {
+function CreateForm({ t, withHcpc, submitLabel, nameLabel, onSubmit }: { t: TFunc; withHcpc?: boolean; submitLabel: string; nameLabel: string; onSubmit: (email: string, password: string, name: string, hcpc?: string) => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -29,7 +29,7 @@ function CreateForm({ t, withHcpc, submitLabel, onSubmit }: { t: TFunc; withHcpc
   return (
     <Card padding={24} style={{ marginBottom: 18 }}>
       <div className="col" style={{ gap: 16 }}>
-        <Input label={t("auth.name")} value={name} onChange={(e) => setName(e.target.value)} />
+        <Input label={nameLabel} value={name} onChange={(e) => setName(e.target.value)} />
         <Input label={t("auth.email")} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         <Input label={t("auth.password")} type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
         {withHcpc ? <Input label={t("auth.hcpc")} value={hcpc} onChange={(e) => setHcpc(e.target.value)} /> : null}
@@ -148,7 +148,7 @@ export function AdminArea({
       <div style={{ maxWidth: 760 }}>
         <PageHead a={t("admin.therapists.title.a")} b={t("admin.therapists.title.b")} />
         <div style={{ marginBottom: 18 }}>
-          <CreateForm t={t} withHcpc submitLabel={t("admin.createTherapist")}
+          <CreateForm t={t} withHcpc submitLabel={t("admin.createTherapist")} nameLabel={t("admin.therapistName")}
             onSubmit={(e, p, n, h) => act(() => api.createTherapist(e, p, n, h))} />
         </div>
         <div className="col" style={{ gap: 12 }}>
@@ -177,7 +177,7 @@ export function AdminArea({
       <div style={{ maxWidth: 760 }}>
         <PageHead a={t("admin.parents.title.a")} b={t("admin.parents.title.b")} />
         <div style={{ marginBottom: 18 }}>
-          <CreateForm t={t} submitLabel={t("admin.createParent")}
+          <CreateForm t={t} submitLabel={t("admin.createParent")} nameLabel={t("admin.parentName")}
             onSubmit={(e, p, n) => act(() => api.createParent(e, p, n))} />
         </div>
         <div className="col" style={{ gap: 12 }}>

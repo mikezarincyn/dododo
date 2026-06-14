@@ -38,6 +38,12 @@ describe("DesignApp auth gate", () => {
     await waitFor(() => expect(screen.getAllByText("My children").length).toBeGreaterThanOrEqual(1));
     expect(screen.getByRole("button", { name: makeT("en")("auth.logout") })).toBeInTheDocument();
   });
+
+  it("greets the parent with their account name, not a demo name", async () => {
+    render(<DesignApp api={apiWith(parent)} />);
+    await waitFor(() => expect(screen.getByText("Mum")).toBeInTheDocument());
+    expect(screen.queryByText("Anna")).toBeNull();
+  });
 });
 
 describe("i18n + RTL", () => {

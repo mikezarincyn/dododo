@@ -99,9 +99,9 @@ export default function DesignApp({ api = authApi }: { api?: AuthApi }) {
 
   const body =
     role === "parent" ? (
-      <ParentArea t={t} screen={screen} params={r.params} go={go} toast={toast} />
+      <ParentArea t={t} userName={me.name} screen={screen} params={r.params} go={go} toast={toast} />
     ) : role === "ot" ? (
-      <OtArea t={t} screen={screen} params={r.params} go={go} toast={toast} />
+      <OtArea t={t} userName={me.name} screen={screen} params={r.params} go={go} toast={toast} />
     ) : (
       <AdminArea t={t} screen={screen} params={r.params} go={go} toast={toast} />
     );

@@ -16,10 +16,12 @@ function fmtDate(iso: string | null): string {
 // Pseudonymous: display_code only (no name; age omitted for privacy).
 export function OtDashboard({
   t,
+  userName,
   go,
   children,
 }: {
   t: TFunc;
+  userName?: string;
   go: (screen: string, params?: Record<string, string>) => void;
   children: OtChild[];
 }) {
@@ -27,7 +29,7 @@ export function OtDashboard({
     <div>
       <PageHead
         a={t("ot.dash.title.a")}
-        b={t("ot.dash.title.b")}
+        b={userName?.trim() || t("ot.dash.title.b")}
         sub={`${children.length} ${t("ot.dash.sub")}`}
         right={
           <Button variant="primary" size="sm" onClick={() => go("upload")} iconRight={<Icon name="upload" size={16} color="#fff" />}>

@@ -7,10 +7,12 @@ import { ageFromBirthMonth } from "./age";
 // and care-link status. Pixel-ported from the design's ParentChildren.
 export function ParentChildren({
   t,
+  userName,
   go,
   children,
 }: {
   t: TFunc;
+  userName?: string;
   go: (screen: string, params?: Record<string, string>) => void;
   children: ParentChild[];
 }) {
@@ -18,7 +20,7 @@ export function ParentChildren({
     <div>
       <PageHead
         a={t("parent.dash.title.a")}
-        b={t("parent.dash.title.b")}
+        b={userName?.trim() || t("parent.dash.title.b")}
         sub={t("parent.dash.sub")}
         right={
           <Button variant="primary" size="sm" onClick={() => go("addchild")} iconRight={<Icon name="plus" size={16} color="#fff" />}>

@@ -13,6 +13,7 @@ import { Queue } from "../ot/Queue";
 // upload queue, all scoped server-side by X-Parent-Id). `api` injectable for tests.
 export function ParentArea({
   t,
+  userName,
   screen,
   params,
   go,
@@ -20,6 +21,7 @@ export function ParentArea({
   api = parentApi,
 }: {
   t: TFunc;
+  userName?: string;
   screen: string;
   params: Record<string, string>;
   go: (screen: string, params?: Record<string, string>) => void;
@@ -95,5 +97,5 @@ export function ParentArea({
   if (screen === "queue") {
     return <Queue t={t} go={go} mode="parent" items={submissions} />;
   }
-  return <ParentChildren t={t} go={go} children={children} />;
+  return <ParentChildren t={t} userName={userName} go={go} children={children} />;
 }

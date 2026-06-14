@@ -26,4 +26,16 @@ describe("ParentChildren", () => {
     expect(screen.queryByText("CH-AAAAAA")).toBeNull();
     expect(screen.getAllByRole("button", { name: t("parent.addChild") }).length).toBeGreaterThanOrEqual(1);
   });
+
+  it("greets with the account name, not a demo string", () => {
+    render(<ParentChildren t={t} userName="Mike" go={() => {}} children={KIDS} />);
+    expect(screen.getByText("Mike")).toBeInTheDocument();
+    expect(screen.queryByText("Anna")).toBeNull();
+    expect(screen.queryByText("there")).toBeNull();
+  });
+
+  it("falls back to a neutral greeting when no name is set", () => {
+    render(<ParentChildren t={t} userName="" go={() => {}} children={KIDS} />);
+    expect(screen.getByText(t("parent.dash.title.b"))).toBeInTheDocument();
+  });
 });

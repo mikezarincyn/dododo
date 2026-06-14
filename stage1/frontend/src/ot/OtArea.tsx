@@ -13,6 +13,7 @@ import { ChildProgress, ObservationDetail } from "./ChildProgress";
 // is injectable for tests; defaults to the real backend client.
 export function OtArea({
   t,
+  userName,
   screen,
   params,
   go,
@@ -20,6 +21,7 @@ export function OtArea({
   api = otApi,
 }: {
   t: TFunc;
+  userName?: string;
   screen: string;
   params: Record<string, string>;
   go: (screen: string, params?: Record<string, string>) => void;
@@ -86,5 +88,5 @@ export function OtArea({
     if (!obs) return <ChildProgress t={t} go={go} child={child} progress={data.progress} observations={data.observations} />;
     return <ObservationDetail t={t} go={go} child={child} obs={obs} />;
   }
-  return <OtDashboard t={t} go={go} children={children} />;
+  return <OtDashboard t={t} userName={userName} go={go} children={children} />;
 }

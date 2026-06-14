@@ -32,6 +32,18 @@ describe("AdminArea", () => {
     expect(screen.getByText(t("admin.stat.pending"))).toBeInTheDocument();
   });
 
+  it("create-forms label the name field for the created user, not 'Your name'", async () => {
+    const u = userEvent.setup();
+    render(<AdminArea t={t} screen="therapists" params={{}} go={noop} toast={noop} api={mkApi()} />);
+    await u.click(screen.getByRole("button", { name: t("admin.createTherapist") }));
+    expect(screen.getByText(t("admin.therapistName"))).toBeInTheDocument();
+    expect(screen.queryByText(t("auth.name"))).toBeNull();
+
+    render(<AdminArea t={t} screen="parents" params={{}} go={noop} toast={noop} api={mkApi()} />);
+    await u.click(screen.getByRole("button", { name: t("admin.createParent") }));
+    expect(screen.getByText(t("admin.parentName"))).toBeInTheDocument();
+  });
+
   it("approves a pending therapist", async () => {
     const ot: AdminUser = { id: "o1", email: "ot@x.com", name: "Maya", role: "ot", status: "pending", children: 0 };
     const api = mkApi({ _therapists: [ot] });
