@@ -1,6 +1,7 @@
 import { Button, Icon, PageHead, StatusBadge } from "../components/ds";
 import { SCENARIOS } from "../data/reference";
 import type { TFunc } from "../i18n/strings";
+import { ParentJourney } from "../parent/ParentJourney";
 
 export interface QueueRow {
   submission_id: string;
@@ -9,6 +10,7 @@ export interface QueueRow {
   size_bytes: number | null;
   state: string;
   video_purged?: boolean;
+  recording_quality?: "good" | "partial" | "low" | null;
   created_at: string;
 }
 
@@ -36,6 +38,14 @@ export function Queue({
       <PageHead a={t("upload.queue.title.a")} b={t("upload.queue.title.b")} sub={mode === "parent" ? t("upload.queue.parentSub") : t("upload.queue.sub")} />
       {items.length === 0 ? (
         <p className="ds-muted" style={{ fontSize: 15 }}>{t("Nothing to review right now.")}</p>
+      ) : mode === "parent" ? (
+        // SAFE parent layer: processing journey + recording quality + regularity.
+        // No metrics/graphs/skeleton/judgments ever reach the parent.
+        <div className="col" style={{ gap: 14 }}>
+          {items.map((u, i) => (
+            <ParentJourney key={u.submission_id} t={t} item={u} ordinal={i + 1} />
+          ))}
+        </div>
       ) : (
         <div className="col" style={{ gap: 14 }}>
           {items.map((u) => {
@@ -56,9 +66,7 @@ export function Queue({
                       <span className="code-chip">{u.display_code}</span>
                       {u.scenario ? <span style={{ fontSize: 13.5, color: "var(--text-muted)", fontWeight: 600 }}>{scenarioLabel(t, u.scenario)}</span> : null}
                     </div>
-                    <div style={{ fontSize: 13.5, color: "var(--text-muted)", marginTop: 4 }}>
-                      {processing && mode === "parent" ? t("queue.processingHint") : sizeMb}
-                    </div>
+                    <div style={{ fontSize: 13.5, color: "var(--text-muted)", marginTop: 4 }}>{sizeMb}</div>
                   </div>
                   <div className="col" style={{ alignItems: "flex-end", gap: 10, flexShrink: 0 }}>
                     {processing ? (
@@ -74,15 +82,10 @@ export function Queue({
                         <Icon name="check" size={13} /> {t("Reviewed")}
                       </span>
                     )}
-                    {ready && mode === "ot" ? (
+                    {ready ? (
                       <Button variant="soft" size="sm" style={{ minHeight: 40, padding: "0 18px", fontSize: 13.5 }} onClick={() => go("annotate", { submissionId: u.submission_id })}>
                         {t("upload.queue.annotate")}
                       </Button>
-                    ) : null}
-                    {ready && mode === "parent" ? (
-                      <span className="chip" style={{ background: "var(--green-100)", color: "var(--green-ink)" }}>
-                        <Icon name="heart-handshake" size={13} /> {t("queue.shared")}
-                      </span>
                     ) : null}
                   </div>
                 </div>

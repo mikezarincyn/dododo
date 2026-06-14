@@ -24,6 +24,9 @@ export interface ParentSubmission {
   size_bytes: number | null;
   state: string;
   video_purged: boolean;
+  // SAFE for the parent: coarse RECORDING quality (about the camera/framing, not the
+  // child). No metric/signal/score/judgment is ever exposed to the parent.
+  recording_quality: "good" | "partial" | "low" | null;
   created_at: string;
 }
 

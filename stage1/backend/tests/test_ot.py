@@ -160,6 +160,25 @@ def test_ot_analysis_forbidden_without_care_link(sandbox, monkeypatch, store):
     assert client.get(f"/api/ot/analysis/{sid}", headers={"X-Parent-Id": PA}).status_code == 401
 
 
+def test_parent_submissions_expose_only_safe_fields(sandbox, monkeypatch, store):
+    """Родителю уходит ТОЛЬКО безопасное: грубое recording_quality (про кадр) и
+    статус — никаких auto_metrics/сигналов/аналитики."""
+    client = _app(monkeypatch)
+    child_id, _ = _add_child(client)
+    sid = _upload(client, child_id)
+    # Симулируем результат обработки: auto-метрики + качество съёмки на submission.
+    store.mark_ready(sid, auto_metrics=[{"label": "x", "value": "1", "state": "calibration"}], recording_quality="good")
+    _store_bundle(store, sid)
+
+    subs = client.get("/api/parent/submissions", headers={"X-Parent-Id": PA}).json()["submissions"]
+    assert len(subs) == 1
+    item = subs[0]
+    assert item["recording_quality"] == "good"          # безопасное — про камеру
+    # НИКАКОЙ аналитики/метрик ребёнка родителю.
+    for leaked in ("auto_metrics", "series", "events", "latencies", "analysis", "metrics", "checklist_hints"):
+        assert leaked not in item, f"parent submission leaked {leaked}"
+
+
 def test_ot_analysis_gone_after_review(sandbox, monkeypatch, store):
     client = _app(monkeypatch)
     child_id, _ = _add_child(client)
