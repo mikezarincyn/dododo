@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { otApi, getOtToken, setOtToken, clearOtToken, type OtApi, type OtChild, type QueueItem, type Observation, type DomainTrend } from "../api/ot";
+import { otApi, type OtApi, type OtChild, type QueueItem, type Observation, type DomainTrend } from "../api/ot";
 import type { TFunc } from "../i18n/strings";
-import { OtSignIn } from "./OtSignIn";
 import { OtDashboard } from "./OtDashboard";
 import { Upload } from "./Upload";
 import { Queue } from "./Queue";
@@ -27,8 +26,6 @@ export function OtArea({
   toast: (m: string) => void;
   api?: OtApi;
 }) {
-  const [token, setToken] = useState<string>(getOtToken());
-  const [authError, setAuthError] = useState<string | null>(null);
   const [children, setChildren] = useState<OtChild[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [childObs, setChildObs] = useState<{ id: string; observations: Observation[]; progress: Record<string, DomainTrend> }>({ id: "", observations: [], progress: {} });
@@ -39,13 +36,13 @@ export function OtArea({
   }, [api]);
 
   useEffect(() => {
-    if (token) refresh();
-  }, [token, refresh]);
+    refresh();
+  }, [refresh]);
 
   // Load per-child observations + progress when viewing progress/obs.
   const childId = params.childId || "";
   useEffect(() => {
-    if (!token || !childId || (screen !== "progress" && screen !== "obs")) return;
+    if (!childId || (screen !== "progress" && screen !== "obs")) return;
     let alive = true;
     Promise.all([api.observations(childId), api.progress(childId)])
       .then(([observations, progress]) => {
@@ -55,23 +52,7 @@ export function OtArea({
     return () => {
       alive = false;
     };
-  }, [token, childId, screen, api]);
-
-  async function signIn(tok: string) {
-    setOtToken(tok);
-    setAuthError(null);
-    try {
-      await api.children(); // validate token
-      setToken(tok);
-    } catch {
-      clearOtToken();
-      setAuthError(t("console.signInError"));
-    }
-  }
-
-  if (!token) {
-    return <OtSignIn t={t} onSubmit={signIn} error={authError} />;
-  }
+  }, [childId, screen, api]);
 
   if (screen === "upload") {
     return (

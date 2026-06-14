@@ -178,6 +178,35 @@ CONSENT_HIDDEN_CHECKBOX_IDS = (
 ROLE_REVIEWER = "reviewer"
 ROLE_ADMIN = "admin"
 
+# ---------------------------------------------------------------------------
+# Учётные записи (email/password) — три роли продукта.
+# Пароли хранятся ТОЛЬКО хешем (stdlib scrypt, соль на пользователя), не в
+# открытом виде и не в логах. PII (email) держим в USERS_DIR (durable, под
+# persistent volume в проде). Сессии — серверные файлы + HTTP-only cookie.
+# ---------------------------------------------------------------------------
+ROLE_PARENT = "parent"
+ROLE_OT = "ot"
+USER_ROLES = (ROLE_PARENT, ROLE_OT, ROLE_ADMIN)
+USER_STATUSES = ("active", "pending", "deactivated")
+
+USERS_DIR = STAGE1_DATA_ROOT / "users"
+SESSIONS_DIR = STAGE1_DATA_ROOT / "sessions"
+RESET_TOKENS_DIR = STAGE1_DATA_ROOT / "reset_tokens"
+
+SESSION_COOKIE = "dododo_session"
+SESSION_TTL_DAYS = int(os.environ.get("DODODO_SESSION_TTL_DAYS", "30"))
+RESET_TTL_MINUTES = int(os.environ.get("DODODO_RESET_TTL_MINUTES", "60"))
+PASSWORD_MIN_LEN = int(os.environ.get("DODODO_PASSWORD_MIN_LEN", "8"))
+
+
+def seed_admin_email():
+    return os.environ.get("DODODO_ADMIN_EMAIL")
+
+
+def seed_admin_password():
+    return os.environ.get("DODODO_ADMIN_PASSWORD")
+
+
 # Реестр учёток на Стадии 1: env с JSON-картой { "<bearer-token>": {actor_id, role} }.
 # Пилот на ≤30 семей — статический реестр приемлем.
 # TODO-FOUNDER/TODO-LAWYER: заменить на нормальный IdP/SSO с MFA для специалистов

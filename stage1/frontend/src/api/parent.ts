@@ -37,18 +37,11 @@ export interface ParentApi {
   childObservations(childId: string): Promise<{ id: string; created_at: string }[]>;
 }
 
-function parentId(): string {
-  let id = localStorage.getItem("dododoParentId");
-  if (!id) {
-    const uuid = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-    id = uuid.replace(/[^0-9a-f]/gi, "").slice(0, 32).padEnd(32, "0").toLowerCase();
-    localStorage.setItem("dododoParentId", id);
-  }
-  return id;
-}
-
-function headers(): Record<string, string> {
-  return { "X-Parent-Id": parentId(), "Content-Type": "application/json" };
+// Identity is the HTTP-only session cookie (parent account). credentials:"include"
+// sends it; the backend scopes every call to the signed-in parent.
+const GET: RequestInit = { credentials: "include" };
+function postJSON(body: unknown): RequestInit {
+  return { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
 }
 
 async function ok<T>(r: Response): Promise<T> {
@@ -59,45 +52,33 @@ async function ok<T>(r: Response): Promise<T> {
 // Real implementation against the live backend.
 export const parentApi: ParentApi = {
   async listChildren() {
-    const r = await fetch("/api/parent/children", { headers: headers() });
-    return (await ok<{ children: ParentChild[] }>(r)).children;
+    return (await ok<{ children: ParentChild[] }>(await fetch("/api/parent/children", GET))).children;
   },
   async createChild(firstName, birthMonth, checkedIds) {
-    const r = await fetch("/api/parent/children", {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify({ first_name: firstName, birth_month: birthMonth, checked_ids: checkedIds }),
-    });
-    return ok<{ child_id: string; display_code: string }>(r);
+    return ok<{ child_id: string; display_code: string }>(
+      await fetch("/api/parent/children", postJSON({ first_name: firstName, birth_month: birthMonth, checked_ids: checkedIds })),
+    );
   },
   async listInvites() {
-    const r = await fetch("/api/parent/invites", { headers: headers() });
-    return (await ok<{ invites: Invite[] }>(r)).invites;
+    return (await ok<{ invites: Invite[] }>(await fetch("/api/parent/invites", GET))).invites;
   },
   async sendInvite(contact) {
-    const r = await fetch("/api/parent/invites", {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify({ contact }),
-    });
-    return ok<Invite>(r);
+    return ok<Invite>(await fetch("/api/parent/invites", postJSON({ contact })));
   },
   async submitVideo(childId, scenario, file) {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("child_id", childId);
     fd.append("scenario", scenario);
-    const r = await fetch("/api/submissions", { method: "POST", body: fd });
+    const r = await fetch("/api/submissions", { method: "POST", credentials: "include", body: fd });
     return ok<{ submission_id: string }>(r);
   },
   async listSubmissions() {
-    const r = await fetch("/api/parent/submissions", { headers: headers() });
-    return (await ok<{ submissions: ParentSubmission[] }>(r)).submissions;
+    return (await ok<{ submissions: ParentSubmission[] }>(await fetch("/api/parent/submissions", GET))).submissions;
   },
   async childObservations(childId) {
     // Confirmed-only (enforced server-side). Parent gentle view uses only the
     // COUNT/dates — never the clinical summaries, metrics or scores.
-    const r = await fetch(`/api/parent/child/${childId}/observations`, { headers: headers() });
-    return (await ok<{ observations: { id: string; created_at: string }[] }>(r)).observations;
+    return (await ok<{ observations: { id: string; created_at: string }[] }>(await fetch(`/api/parent/child/${childId}/observations`, GET))).observations;
   },
 };

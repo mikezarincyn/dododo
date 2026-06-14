@@ -21,18 +21,18 @@ export function TopBar({
   setLang,
   roleLabel,
   roleIcon,
-  onSwitchRole,
+  onLogout,
 }: {
   t: TFunc;
   lang: Lang;
   setLang: (l: Lang) => void;
   roleLabel?: string;
   roleIcon?: string;
-  onSwitchRole?: () => void;
+  onLogout?: () => void;
 }) {
   return (
     <header className="app-topbar">
-      <Logo height={30} onClick={onSwitchRole} style={{ cursor: onSwitchRole ? "pointer" : "default" }} />
+      <Logo height={30} />
       {roleLabel ? (
         <span className="chip" style={{ background: "var(--lilac-100)", color: "var(--navy-700)", fontSize: 13 }}>
           <Icon name={roleIcon || "user"} size={13} />
@@ -44,9 +44,9 @@ export function TopBar({
       </Badge>
       <span className="spacer" />
       <LangSwitcher lang={lang} setLang={setLang} />
-      {onSwitchRole ? (
-        <Button variant="soft" size="sm" onClick={onSwitchRole} style={{ minHeight: 42, padding: "0 20px", fontSize: 14 }}>
-          {t("nav.switchRole")}
+      {onLogout ? (
+        <Button variant="soft" size="sm" onClick={onLogout} style={{ minHeight: 42, padding: "0 20px", fontSize: 14 }}>
+          {t("auth.logout")}
         </Button>
       ) : null}
     </header>
@@ -61,7 +61,7 @@ export function Shell({
   setLang,
   roleLabel,
   roleIcon,
-  onSwitchRole,
+  onLogout,
   nav,
   active,
   onNav,
@@ -72,7 +72,7 @@ export function Shell({
   setLang: (l: Lang) => void;
   roleLabel?: string;
   roleIcon?: string;
-  onSwitchRole?: () => void;
+  onLogout?: () => void;
   nav: NavItem[];
   active: string;
   onNav: (id: string) => void;
@@ -80,7 +80,7 @@ export function Shell({
 }) {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minBlockSize: 0 }}>
-      <TopBar t={t} lang={lang} setLang={setLang} roleLabel={roleLabel} roleIcon={roleIcon} onSwitchRole={onSwitchRole} />
+      <TopBar t={t} lang={lang} setLang={setLang} roleLabel={roleLabel} roleIcon={roleIcon} onLogout={onLogout} />
       <div className="app-frame">
         <nav className="app-side">
           {nav.map((n) => (

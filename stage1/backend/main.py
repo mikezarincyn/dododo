@@ -16,13 +16,16 @@ from fastapi import (
     Form,
     Header,
     HTTPException,
+    Request,
     Response,
     UploadFile,
 )
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import sessions
 import stage1_config as cfg
+import users
 from auth import Principal, resolve_principal
 from media_store import (
     AccessDeniedError,
@@ -88,6 +91,19 @@ class CareLinkIn(BaseModel):
     ot_name: str | None = None
 
 
+class RegisterIn(BaseModel):
+    email: str
+    password: str
+    name: str
+    role: str  # "parent" | "ot"
+    hcpc: str | None = None
+
+
+class LoginIn(BaseModel):
+    email: str
+    password: str
+
+
 # Pilot parent identity: a client-held opaque id (uuid4 hex) in the X-Parent-Id
 # header. No parent IdP yet — scoping is by this id (a parent sees only its own
 # children). TODO-LAWYER/FOUNDER: real verifiable parent auth before GA; until
@@ -95,10 +111,30 @@ class CareLinkIn(BaseModel):
 _PARENT_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
 
-def require_parent(x_parent_id: str | None = Header(default=None)) -> str:
-    if not x_parent_id or not _PARENT_ID_RE.match(x_parent_id):
-        raise HTTPException(status_code=400, detail="valid X-Parent-Id header required")
-    return x_parent_id
+# ---- session-based current user (cookie) ----
+def current_user(request: Request) -> dict | None:
+    """Active user from the session cookie, or None."""
+    sid = request.cookies.get(cfg.SESSION_COOKIE)
+    if not sid:
+        return None
+    uid = sessions.user_id_for(sid)
+    if not uid:
+        return None
+    u = users.get_by_id(uid)
+    if not u or u.get("status") != "active":
+        return None
+    return u
+
+
+def require_parent(request: Request, x_parent_id: str | None = Header(default=None)) -> str:
+    """Parent scope: authenticated parent account → its id; else the X-Parent-Id
+    header (transitional / tests). A parent sees only their own children either way."""
+    u = current_user(request)
+    if u and u.get("role") == cfg.ROLE_PARENT:
+        return u["id"]
+    if x_parent_id and _PARENT_ID_RE.match(x_parent_id):
+        return x_parent_id
+    raise HTTPException(status_code=401, detail="parent authentication required")
 
 
 # Видео-MIME по расширению (для inline-воспроизведения, без attachment).
@@ -110,7 +146,24 @@ _VIDEO_MIME = {
 }
 
 
-def _principal(authorization: str | None) -> Principal:
+def _session_principal(request: Request) -> Principal | None:
+    """Map an active session user to a console Principal. OT account → reviewer
+    semantics (actor_id = user id, used as the care-link reviewer_actor)."""
+    u = current_user(request)
+    if not u:
+        return None
+    if u.get("role") == cfg.ROLE_OT:
+        return Principal(actor_id=u["id"], role=cfg.ROLE_REVIEWER)
+    if u.get("role") == cfg.ROLE_ADMIN:
+        return Principal(actor_id=u["id"], role=cfg.ROLE_ADMIN)
+    return None
+
+
+def _any_principal(request: Request, authorization: str | None) -> Principal:
+    """Session cookie first, then legacy Bearer token (transitional / tests)."""
+    p = _session_principal(request)
+    if p is not None:
+        return p
     token = None
     if authorization and authorization.lower().startswith("bearer "):
         token = authorization.split(" ", 1)[1].strip()
@@ -120,23 +173,31 @@ def _principal(authorization: str | None) -> Principal:
     return p
 
 
-def require_console(authorization: str | None = Header(default=None)) -> Principal:
+def require_console(request: Request, authorization: str | None = Header(default=None)) -> Principal:
     """Любой валидный принципал (reviewer или admin)."""
-    return _principal(authorization)
+    return _any_principal(request, authorization)
 
 
-def require_reviewer(authorization: str | None = Header(default=None)) -> Principal:
-    p = _principal(authorization)
+def require_reviewer(request: Request, authorization: str | None = Header(default=None)) -> Principal:
+    p = _any_principal(request, authorization)
     if p.role != cfg.ROLE_REVIEWER:
         raise HTTPException(status_code=403, detail="reviewer role required")
     return p
 
 
-def require_admin(authorization: str | None = Header(default=None)) -> Principal:
-    p = _principal(authorization)
+def require_admin(request: Request, authorization: str | None = Header(default=None)) -> Principal:
+    p = _any_principal(request, authorization)
     if p.role != cfg.ROLE_ADMIN:
         raise HTTPException(status_code=403, detail="admin role required")
     return p
+
+
+def require_admin_user(request: Request) -> dict:
+    """Admin endpoints that manage USER accounts need the admin user (session)."""
+    u = current_user(request)
+    if not u or u.get("role") != cfg.ROLE_ADMIN:
+        raise HTTPException(status_code=403, detail="admin role required")
+    return u
 
 
 def create_app(*, enforce_https: bool | None = None) -> FastAPI:
@@ -149,6 +210,66 @@ def create_app(*, enforce_https: bool | None = None) -> FastAPI:
         version="0.1.0",
     )
     install_security(app, enforce_https=enforce_https)
+
+    # First admin from env (no-op if an admin already exists or env unset).
+    users.ensure_seed_admin()
+
+    _cookie_secure = bool(enforce_https)
+
+    def _set_session_cookie(response: Response, sid: str) -> None:
+        response.set_cookie(
+            cfg.SESSION_COOKIE, sid, max_age=cfg.SESSION_TTL_DAYS * 86400,
+            httponly=True, secure=_cookie_secure, samesite="lax", path="/",
+        )
+
+    # ---- Аутентификация (email/password) ----
+    @app.post("/api/auth/register")
+    def auth_register(payload: RegisterIn, response: Response):
+        """Parent self-reg → active. OT application → pending (admin approves)."""
+        role = payload.role
+        if role not in (cfg.ROLE_PARENT, cfg.ROLE_OT):
+            raise HTTPException(status_code=422, detail="role must be parent or ot")
+        status = "active" if role == cfg.ROLE_PARENT else "pending"
+        try:
+            u = users.create_user(
+                payload.email, payload.password, role, payload.name,
+                status=status, self_registered=True, hcpc=payload.hcpc,
+            )
+        except users.EmailTakenError:
+            raise HTTPException(status_code=409, detail="email already registered")
+        except users.UserError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        # Active parents are logged in immediately; pending OTs are not.
+        if u["status"] == "active":
+            _set_session_cookie(response, sessions.create(u["id"]))
+        return {"user": users.public_view(u), "pending": u["status"] == "pending"}
+
+    @app.post("/api/auth/login")
+    def auth_login(payload: LoginIn, response: Response):
+        u = users.get_by_email(payload.email)
+        if not u or not users.verify_password(payload.password, u.get("password_hash", "")):
+            raise HTTPException(status_code=401, detail="invalid email or password")
+        if u["status"] == "pending":
+            raise HTTPException(status_code=403, detail="account pending approval")
+        if u["status"] == "deactivated":
+            raise HTTPException(status_code=403, detail="account deactivated")
+        _set_session_cookie(response, sessions.create(u["id"]))
+        return {"user": users.public_view(u)}
+
+    @app.post("/api/auth/logout")
+    def auth_logout(request: Request, response: Response):
+        sid = request.cookies.get(cfg.SESSION_COOKIE)
+        if sid:
+            sessions.destroy(sid)
+        response.delete_cookie(cfg.SESSION_COOKIE, path="/")
+        return {"ok": True}
+
+    @app.get("/api/auth/me")
+    def auth_me(request: Request):
+        u = current_user(request)
+        if not u:
+            raise HTTPException(status_code=401, detail="not signed in")
+        return {"user": users.public_view(u)}
 
     @app.get("/api/health")
     def health(store: MediaStore = Depends(get_media_store)):

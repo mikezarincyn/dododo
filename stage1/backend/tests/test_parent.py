@@ -96,10 +96,10 @@ def test_create_child_records_no_retention_consent_id(sandbox, store):
 
 def test_parent_id_header_required(sandbox):
     client = _client()
-    # Missing header → 400.
-    assert client.get("/api/parent/children").status_code == 400
-    # Malformed id → 400.
-    assert client.get("/api/parent/children", headers={"X-Parent-Id": "nope"}).status_code == 400
+    # No session and no header → 401 (parent authentication required).
+    assert client.get("/api/parent/children").status_code == 401
+    # Malformed header id (and no session) → still unauthenticated.
+    assert client.get("/api/parent/children", headers={"X-Parent-Id": "nope"}).status_code == 401
 
 
 def test_invites_recorded_and_scoped(sandbox):

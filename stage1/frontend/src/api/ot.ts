@@ -50,21 +50,11 @@ export interface AnnotatePayload {
   metrics: Metric[];
 }
 
-const TOKEN_KEY = "dododoOtToken";
-export function getOtToken(): string {
-  return localStorage.getItem(TOKEN_KEY) || "";
-}
-export function setOtToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
-}
-export function clearOtToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
-}
-
-function authHeaders(json = false): Record<string, string> {
-  const h: Record<string, string> = { Authorization: `Bearer ${getOtToken()}` };
-  if (json) h["Content-Type"] = "application/json";
-  return h;
+// Identity is the HTTP-only session cookie (set at login). credentials:"include"
+// sends it; no tokens in JS.
+const GET: RequestInit = { credentials: "include" };
+function postJSON(body: unknown): RequestInit {
+  return { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
 }
 
 async function ok<T>(r: Response): Promise<T> {
@@ -83,27 +73,26 @@ export interface OtApi {
 
 export const otApi: OtApi = {
   async children() {
-    return (await ok<{ children: OtChild[] }>(await fetch("/api/ot/children", { headers: authHeaders() }))).children;
+    return (await ok<{ children: OtChild[] }>(await fetch("/api/ot/children", GET))).children;
   },
   async queue() {
-    return (await ok<{ items: QueueItem[] }>(await fetch("/api/ot/queue", { headers: authHeaders() }))).items;
+    return (await ok<{ items: QueueItem[] }>(await fetch("/api/ot/queue", GET))).items;
   },
   async observations(childId) {
-    return (await ok<{ observations: Observation[] }>(await fetch(`/api/ot/child/${childId}/observations`, { headers: authHeaders() }))).observations;
+    return (await ok<{ observations: Observation[] }>(await fetch(`/api/ot/child/${childId}/observations`, GET))).observations;
   },
   async progress(childId) {
-    return (await ok<{ progress: Record<string, DomainTrend> }>(await fetch(`/api/ot/child/${childId}/progress`, { headers: authHeaders() }))).progress;
+    return (await ok<{ progress: Record<string, DomainTrend> }>(await fetch(`/api/ot/child/${childId}/progress`, GET))).progress;
   },
   async annotate(submissionId, payload) {
-    const r = await fetch(`/api/ot/annotate/${submissionId}`, { method: "POST", headers: authHeaders(true), body: JSON.stringify(payload) });
-    return ok<Observation>(r);
+    return ok<Observation>(await fetch(`/api/ot/annotate/${submissionId}`, postJSON(payload)));
   },
   async submitVideo(childId, scenario, file) {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("child_id", childId);
     fd.append("scenario", scenario);
-    const r = await fetch("/api/submissions", { method: "POST", body: fd });
+    const r = await fetch("/api/submissions", { method: "POST", credentials: "include", body: fd });
     return ok<{ submission_id: string }>(r);
   },
 };

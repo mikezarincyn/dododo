@@ -100,9 +100,11 @@ def test_each_view_writes_immutable_record(console):
         assert rec["submission_id"] == sid           # video_id
         assert rec["event"] == "get_for_review"      # action
         assert rec["ts"].endswith("+00:00")          # timestamp (UTC)
-    # Лог только дописывается: нет API для его правки/удаления.
+    # Лог только дописывается: нет API для его чтения/правки/удаления. (Проверяем
+    # именно аудит-лог-маршруты; "login"/"logout" — это auth, не лог аудита.)
     routes = {r.path for r in console["client"].app.routes}
-    assert not any("audit" in p or "log" in p for p in routes)
+    assert not any("audit" in p for p in routes)
+    assert not any(p.rstrip("/").endswith(("/log", "/logs")) for p in routes)
 
 
 def test_denied_access_is_logged(console):
