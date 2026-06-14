@@ -6,6 +6,7 @@ P3 закладывает каркас: принудительный TLS/HSTS + 
 файловой системе или SDK провайдера в роутах быть не должно.
 """
 
+import re
 from pathlib import Path
 
 from fastapi import (
@@ -52,6 +53,52 @@ class AssignIn(BaseModel):
 
 class WithdrawIn(BaseModel):
     submission_id: str
+
+
+class ParentChildIn(BaseModel):
+    first_name: str
+    birth_month: str
+    checked_ids: list[str]
+
+
+class InviteIn(BaseModel):
+    contact: str
+
+
+class MetricIn(BaseModel):
+    label: str
+    value: str
+    state: str  # "confirmed" | "calibration"
+    score: float | None = None
+    domains: list[str] | None = None
+
+
+class AnnotateIn(BaseModel):
+    scenario: str
+    domains: list[str]
+    duration: str = ""
+    summary: str = ""
+    notes: str = ""
+    metrics: list[MetricIn]
+
+
+class CareLinkIn(BaseModel):
+    child_id: str
+    reviewer_actor: str
+    ot_name: str | None = None
+
+
+# Pilot parent identity: a client-held opaque id (uuid4 hex) in the X-Parent-Id
+# header. No parent IdP yet — scoping is by this id (a parent sees only its own
+# children). TODO-LAWYER/FOUNDER: real verifiable parent auth before GA; until
+# then this is demo-grade isolation, documented alongside verifiable-consent TODO.
+_PARENT_ID_RE = re.compile(r"^[0-9a-f]{32}$")
+
+
+def require_parent(x_parent_id: str | None = Header(default=None)) -> str:
+    if not x_parent_id or not _PARENT_ID_RE.match(x_parent_id):
+        raise HTTPException(status_code=400, detail="valid X-Parent-Id header required")
+    return x_parent_id
 
 
 # Видео-MIME по расширению (для inline-воспроизведения, без attachment).
@@ -145,6 +192,7 @@ def create_app(*, enforce_https: bool | None = None) -> FastAPI:
     async def create_submission(
         file: UploadFile = File(...),
         child_id: str | None = Form(default=None),
+        scenario: str | None = Form(default=None),
         store: MediaStore = Depends(get_media_store),
     ):
         """Загрузка видео родителем → MediaStore.put → submission (pending) →
@@ -158,7 +206,7 @@ def create_app(*, enforce_https: bool | None = None) -> FastAPI:
         # псевдонима (display_code), без свободного ввода имени.
         consent_record = {"child_id": child_id} if child_id else {"source": "stage1_demo_upload"}
         try:
-            submission_id = store.put(data, consent_record, original_ext=ext)
+            submission_id = store.put(data, consent_record, original_ext=ext, scenario=scenario)
         except RegionNotConfiguredError as e:
             raise HTTPException(status_code=503, detail=str(e))
         except (ConsentRequiredError, SubmissionNotFoundError) as e:
@@ -166,6 +214,176 @@ def create_app(*, enforce_https: bool | None = None) -> FastAPI:
         except (ValueError, MediaStoreError) as e:
             raise HTTPException(status_code=400, detail=str(e))
         return {"submission_id": submission_id}
+
+    # ---- Родитель (P-parent): свои дети, добавление, приглашения ----
+
+    @app.post("/api/parent/children")
+    def parent_create_child(
+        payload: ParentChildIn,
+        parent_id: str = Depends(require_parent),
+        store: MediaStore = Depends(get_media_store),
+    ):
+        """Родитель добавляет ребёнка: генерится псевдоним CH-XXXXXX + пишется
+        согласие; имя/месяц рождения хранятся ПРИВАТНО у родителя, в проф-запись
+        не попадают. Возвращаем только id + display_code (имя обратно не светим
+        в проф-каналы — клиент уже знает его сам)."""
+        try:
+            out = store.create_parent_child(
+                parent_id, payload.first_name, payload.birth_month, payload.checked_ids
+            )
+        except ConsentIncompleteError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        except RegionNotConfiguredError as e:
+            raise HTTPException(status_code=503, detail=str(e))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        return out
+
+    @app.get("/api/parent/children")
+    def parent_list_children(
+        parent_id: str = Depends(require_parent),
+        store: MediaStore = Depends(get_media_store),
+    ):
+        """Только свои дети (по parent_id). Чужих не отдаём."""
+        return {"children": store.list_parent_children(parent_id)}
+
+    @app.post("/api/parent/invites")
+    def parent_add_invite(
+        payload: InviteIn,
+        parent_id: str = Depends(require_parent),
+        store: MediaStore = Depends(get_media_store),
+    ):
+        try:
+            entry = store.add_invite(parent_id, payload.contact)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        return entry
+
+    @app.get("/api/parent/invites")
+    def parent_list_invites(
+        parent_id: str = Depends(require_parent),
+        store: MediaStore = Depends(get_media_store),
+    ):
+        return {"invites": store.list_invites(parent_id)}
+
+    @app.get("/api/parent/submissions")
+    def parent_submissions(
+        parent_id: str = Depends(require_parent),
+        store: MediaStore = Depends(get_media_store),
+    ):
+        """Очередь родителя: загрузки только своих детей (scope по parent_id)."""
+        my = {c["child_id"] for c in store.list_parent_children(parent_id)}
+        out = []
+        for cid in my:
+            for m in store._submissions_for_child(cid):
+                out.append({
+                    "submission_id": m.get("submission_id"),
+                    "display_code": m.get("display_code"),
+                    "scenario": m.get("scenario"),
+                    "size_bytes": m.get("size_bytes"),
+                    "state": m.get("state"),
+                    "video_purged": m.get("video_purged", False),
+                    "created_at": m.get("created_at"),
+                })
+        out.sort(key=lambda m: m.get("created_at") or "")
+        return {"submissions": out}
+
+    @app.get("/api/parent/child/{child_id}/observations")
+    def parent_child_observations(
+        child_id: str,
+        parent_id: str = Depends(require_parent),
+        store: MediaStore = Depends(get_media_store),
+    ):
+        """Родителю — ТОЛЬКО confirmed-часть наблюдений своего ребёнка (без
+        in-calibration авто-метрик). Чужого ребёнка не отдаём."""
+        if not store.parent_owns_child(parent_id, child_id):
+            raise HTTPException(status_code=403, detail="not your child")
+        return {"observations": store.list_observations(child_id, confirmed_only=True)}
+
+    # ---- Эрготерапевт (OT): дашборд/очередь/наблюдения/разметка по care-link ----
+
+    def _require_linked(store: MediaStore, principal: Principal, child_id: str):
+        if not store.is_care_linked(principal.actor_id, child_id):
+            raise HTTPException(status_code=403, detail="no active care link with this child")
+
+    @app.get("/api/ot/children")
+    def ot_children(
+        principal: Principal = Depends(require_reviewer),
+        store: MediaStore = Depends(get_media_store),
+    ):
+        """Дашборд ОТ: дети ТОЛЬКО по активной care-link."""
+        return {"children": store.ot_children(principal.actor_id)}
+
+    @app.get("/api/ot/queue")
+    def ot_queue(
+        principal: Principal = Depends(require_reviewer),
+        store: MediaStore = Depends(get_media_store),
+    ):
+        return {"items": store.ot_queue(principal.actor_id)}
+
+    @app.get("/api/ot/child/{child_id}/observations")
+    def ot_child_observations(
+        child_id: str,
+        principal: Principal = Depends(require_reviewer),
+        store: MediaStore = Depends(get_media_store),
+    ):
+        _require_linked(store, principal, child_id)
+        return {"observations": store.list_observations(child_id)}
+
+    @app.get("/api/ot/child/{child_id}/progress")
+    def ot_child_progress(
+        child_id: str,
+        principal: Principal = Depends(require_reviewer),
+        store: MediaStore = Depends(get_media_store),
+    ):
+        _require_linked(store, principal, child_id)
+        return {"progress": store.child_progress(child_id)}
+
+    @app.post("/api/ot/annotate/{submission_id}")
+    def ot_annotate(
+        submission_id: str,
+        payload: AnnotateIn,
+        principal: Principal = Depends(require_reviewer),
+        store: MediaStore = Depends(get_media_store),
+    ):
+        """Сохранить разметку → observation (durable), затем удалить сырое видео
+        (no-retention). Доступ только при активной care-link (проверяется внутри)."""
+        try:
+            obs = store.save_observation(
+                submission_id, principal.actor_id,
+                scenario=payload.scenario,
+                domains=payload.domains,
+                duration=payload.duration,
+                summary=payload.summary,
+                notes=payload.notes,
+                metrics=[m.model_dump() for m in payload.metrics],
+            )
+        except AccessDeniedError as e:
+            raise HTTPException(status_code=403, detail=str(e))
+        except VideoUnavailableError as e:
+            raise HTTPException(status_code=410, detail=str(e))
+        except SubmissionNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except RegionNotConfiguredError as e:
+            raise HTTPException(status_code=503, detail=str(e))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        return obs
+
+    @app.post("/api/console/care-links")
+    def create_care_link(
+        payload: CareLinkIn,
+        principal: Principal = Depends(require_admin),
+        store: MediaStore = Depends(get_media_store),
+    ):
+        """admin активирует связку OT↔ребёнок (полноценный admin-экран — далее)."""
+        try:
+            rec = store.create_care_link(payload.child_id, payload.reviewer_actor, ot_name=payload.ot_name)
+        except SubmissionNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        return rec
 
     # ---- Консоль специалиста (P4) ----
 

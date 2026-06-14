@@ -25,6 +25,8 @@ def sandbox(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cfg, "STAGE1_DATA_ROOT", data, raising=False)
     monkeypatch.setattr(cfg, "CHILDREN_DIR", data / "children", raising=False)
+    monkeypatch.setattr(cfg, "PARENTS_DIR", data / "parents", raising=False)
+    monkeypatch.setattr(cfg, "CARE_LINKS_DIR", data / "care_links", raising=False)
     monkeypatch.setattr(cfg, "CONSENT_DIR", data / "consent", raising=False)
     monkeypatch.setattr(cfg, "SUBMISSIONS_DIR", data / "submissions", raising=False)
     monkeypatch.setattr(cfg, "AUDIT_LOG_PATH", data / "audit" / "access.log.jsonl", raising=False)

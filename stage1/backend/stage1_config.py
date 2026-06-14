@@ -56,6 +56,15 @@ STAGE1_DATA_ROOT = Path(
     )
 )
 CHILDREN_DIR = STAGE1_DATA_ROOT / "children"
+# Parent-private profiles. SEPARATE from CHILDREN_DIR on purpose: child.json stays
+# strictly pseudonymous (id + display_code, NO name), while a child's real first
+# name + birth month + the owning parent_id live ONLY here. Professional code
+# paths (console queue, get_for_review, admin) read CHILDREN_DIR / submissions —
+# never PARENTS_DIR — so a child's name can never surface in a professional view.
+PARENTS_DIR = STAGE1_DATA_ROOT / "parents"
+# Care links: which OT (reviewer actor) may see which child. An OT sees a child
+# ONLY through an active care link (red line). Pseudonymous: keyed by child_id.
+CARE_LINKS_DIR = STAGE1_DATA_ROOT / "care_links"
 CONSENT_DIR = STAGE1_DATA_ROOT / "consent"
 SUBMISSIONS_DIR = STAGE1_DATA_ROOT / "submissions"
 AUDIT_LOG_PATH = STAGE1_DATA_ROOT / "audit" / "access.log.jsonl"
@@ -112,6 +121,19 @@ MEDIA_KEY_ENV = "DODODO_MEDIA_KEY_B64"
 # ---------------------------------------------------------------------------
 DISPLAY_CODE_PREFIX = "CH-"
 DISPLAY_CODE_PATTERN = r"CH-[A-Z2-7]{6}"  # base32 без 0/1/8/9
+
+# ---------------------------------------------------------------------------
+# Развитие: домены, сценарии, состояния метрик (схема наблюдений — ОТДЕЛЬНАЯ от
+# корневого engine.py; та модель не трогается). Значения портированы из дизайна
+# (data.jsx DOMAINS/SCENARIOS). Reference-данные (filming guides) живут на фронте.
+# ---------------------------------------------------------------------------
+DOMAIN_IDS = ("attention", "communication", "movement", "regulation", "body", "independence")
+SCENARIO_IDS = ("name", "freeplay", "joint", "mealtime", "imitation")
+# Метрика подтверждена ОТ (counts в тренд) или ещё «в калибровке» (показывается,
+# но НИКОГДА не учитывается в трендах) — несущий принцип, см. red line.
+METRIC_STATE_CONFIRMED = "confirmed"
+METRIC_STATE_CALIBRATION = "calibration"
+METRIC_STATES = (METRIC_STATE_CONFIRMED, METRIC_STATE_CALIBRATION)
 
 # ---------------------------------------------------------------------------
 # Согласие (P1) — explicit parental consent

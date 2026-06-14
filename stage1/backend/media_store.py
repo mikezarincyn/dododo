@@ -26,6 +26,7 @@ import os
 import re
 import secrets
 import shutil
+import time
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta, timezone
@@ -293,6 +294,398 @@ class EphemeralMediaStore(MediaStore):
         return out
 
     # ------------------------------------------------------------------
+    # Parent-private profiles (names live ONLY here; never in CHILDREN_DIR,
+    # submissions, console queue or audit — pseudonymisation invariant).
+    # ------------------------------------------------------------------
+    def _parent_dir(self, parent_id: str) -> Path:
+        _validate_id(parent_id, "parent_id")
+        p = cfg.PARENTS_DIR / parent_id
+        _safe_under(cfg.PARENTS_DIR, p, "parent_dir")
+        return p
+
+    def _parent_child_file(self, parent_id: str, child_id: str) -> Path:
+        _validate_id(child_id, "child_id")
+        p = self._parent_dir(parent_id) / f"{child_id}.json"
+        _safe_under(cfg.PARENTS_DIR, p, "parent_child_file")
+        return p
+
+    def create_parent_child(
+        self, parent_id: str, first_name: str, birth_month: str, checked_ids
+    ) -> dict:
+        """Parent adds a child: generate a pseudonymous child (CH-XXXXXX) + record
+        consent, and store the real first name / birth month PRIVATELY against the
+        parent. The professional child record (child.json) never sees the name.
+
+        Order: validate inputs → record_consent (which validates all required
+        checkboxes, THEN creates the child) → write the parent-private profile.
+        A bad name/month or incomplete consent raises before anything persists."""
+        _require_region()
+        _validate_id(parent_id, "parent_id")
+        name = (first_name or "").strip()
+        month = (birth_month or "").strip()
+        if not name:
+            raise ValueError("first_name обязателен")
+        if not month:
+            raise ValueError("birth_month обязателен")
+
+        # Creates the pseudonymous child + durable consent record (validates consent).
+        rec = self.record_consent(checked_ids)
+        child_id = rec["child_id"]
+        display_code = rec["display_code"]
+
+        profile = {
+            "child_id": child_id,
+            "display_code": display_code,
+            "parent_id": parent_id,
+            # PRIVATE — parent-only. Not pseudonymised, not shared with professionals.
+            "first_name": name,
+            "birth_month": month,
+            "consent_id": rec["consent_id"],
+            "care_link": None,  # activated later (admin/OT stage); None → "No therapist yet"
+            "created_at": _now_iso(),
+        }
+        self._parent_child_file(parent_id, child_id).parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self._parent_dir(parent_id).chmod(0o700)
+        except OSError:
+            pass
+        _write_json_0600(self._parent_child_file(parent_id, child_id), profile)
+        # Audit carries ids only — NEVER the name.
+        self._append_audit(
+            "create_parent_child", parent_id=parent_id, child_id=child_id, display_code=display_code
+        )
+        return {"child_id": child_id, "display_code": display_code, "first_name": name, "birth_month": month}
+
+    def list_parent_children(self, parent_id: str) -> list[dict]:
+        """A parent's own children only (scoped by parent_id). Returns the
+        parent-facing view incl. the private first name."""
+        _validate_id(parent_id, "parent_id")
+        pdir = self._parent_dir(parent_id)
+        if not pdir.exists():
+            return []
+        out = []
+        for f in pdir.iterdir():
+            if not f.is_file() or f.name == "invites.json" or f.suffix != ".json":
+                continue
+            try:
+                out.append(_read_json(f))
+            except Exception:
+                continue
+        out.sort(key=lambda m: m.get("created_at", ""))
+        return out
+
+    def parent_owns_child(self, parent_id: str, child_id: str) -> bool:
+        _validate_id(parent_id, "parent_id")
+        try:
+            return self._parent_child_file(parent_id, child_id).exists()
+        except ValueError:
+            return False
+
+    def _invites_file(self, parent_id: str) -> Path:
+        p = self._parent_dir(parent_id) / "invites.json"
+        _safe_under(cfg.PARENTS_DIR, p, "invites_file")
+        return p
+
+    def add_invite(self, parent_id: str, contact: str) -> dict:
+        """Record a therapist invite (UI flow). Activation of the care link is
+        deferred to the admin/OT stage — this only logs intent, status 'sent'."""
+        _validate_id(parent_id, "parent_id")
+        c = (contact or "").strip()
+        if not c:
+            raise ValueError("contact обязателен")
+        invites = self.list_invites(parent_id)
+        entry = {"contact": c, "status": "sent", "created_at": _now_iso()}
+        invites.append(entry)
+        self._parent_dir(parent_id).mkdir(parents=True, exist_ok=True)
+        _write_json_0600(self._invites_file(parent_id), {"invites": invites})
+        self._append_audit("parent_invite", parent_id=parent_id)
+        return entry
+
+    def list_invites(self, parent_id: str) -> list[dict]:
+        _validate_id(parent_id, "parent_id")
+        f = self._invites_file(parent_id)
+        if not f.exists():
+            return []
+        try:
+            return _read_json(f).get("invites", [])
+        except Exception:
+            return []
+
+    # ------------------------------------------------------------------
+    # Care links (OT ↔ child). An OT sees a child ONLY via an active link.
+    # ------------------------------------------------------------------
+    def _care_link_file(self, child_id: str) -> Path:
+        _validate_id(child_id, "child_id")
+        p = cfg.CARE_LINKS_DIR / f"{child_id}.json"
+        _safe_under(cfg.CARE_LINKS_DIR, p, "care_link_file")
+        return p
+
+    def _read_care_link(self, child_id: str) -> dict:
+        f = self._care_link_file(child_id)
+        if not f.exists():
+            return {"child_id": child_id, "links": []}
+        try:
+            return _read_json(f)
+        except Exception:
+            return {"child_id": child_id, "links": []}
+
+    def create_care_link(self, child_id: str, reviewer_actor: str, ot_name: str | None = None) -> dict:
+        """admin (или сидинг) активирует связку OT↔ребёнок. Доступ ОТ к ребёнку
+        существует ТОЛЬКО при наличии активной связки."""
+        _validate_id(child_id, "child_id")
+        if not self._child_dir(child_id).joinpath("child.json").exists():
+            raise SubmissionNotFoundError(f"child {child_id} не найден")
+        if not reviewer_actor:
+            raise ValueError("reviewer_actor обязателен")
+        rec = self._read_care_link(child_id)
+        links = rec.get("links", [])
+        if not any(l.get("actor_id") == reviewer_actor and l.get("status") == "active" for l in links):
+            links.append({
+                "actor_id": reviewer_actor,
+                "ot_name": ot_name or reviewer_actor,
+                "status": "active",
+                "created_at": _now_iso(),
+            })
+        rec = {"child_id": child_id, "links": links}
+        cfg.CARE_LINKS_DIR.mkdir(parents=True, exist_ok=True)
+        _write_json_0600(self._care_link_file(child_id), rec)
+        self._append_audit("create_care_link", child_id=child_id, reviewer_actor=reviewer_actor)
+        return rec
+
+    def is_care_linked(self, actor: str, child_id: str) -> bool:
+        return any(
+            l.get("actor_id") == actor and l.get("status") == "active"
+            for l in self._read_care_link(child_id).get("links", [])
+        )
+
+    def ot_child_ids(self, actor: str) -> list[str]:
+        if not cfg.CARE_LINKS_DIR.exists():
+            return []
+        out = []
+        for f in cfg.CARE_LINKS_DIR.iterdir():
+            if f.suffix != ".json":
+                continue
+            try:
+                rec = _read_json(f)
+            except Exception:
+                continue
+            if any(l.get("actor_id") == actor and l.get("status") == "active" for l in rec.get("links", [])):
+                out.append(rec.get("child_id"))
+        return [c for c in out if c]
+
+    def active_ot_name(self, child_id: str) -> str | None:
+        for l in self._read_care_link(child_id).get("links", []):
+            if l.get("status") == "active":
+                return l.get("ot_name")
+        return None
+
+    # ------------------------------------------------------------------
+    # Observations (durable; survive video purge — no-retention). Pseudonymous:
+    # no child name, only domains/metrics/summary. Stored under the child dir.
+    # ------------------------------------------------------------------
+    def _observations_dir(self, child_id: str) -> Path:
+        _validate_id(child_id, "child_id")
+        p = self._child_dir(child_id) / "observations"
+        _safe_under(cfg.CHILDREN_DIR, p, "observations_dir")
+        return p
+
+    @staticmethod
+    def _compute_domain_scores(metrics: list[dict]) -> dict:
+        """Per-domain score from CONFIRMED metrics only. Calibration metrics are
+        never counted (red line: trends use confirmed observations only) — even if
+        a calibration metric carries a numeric score, it is excluded here."""
+        acc: dict[str, list[float]] = {}
+        for m in metrics:
+            if m.get("state") != cfg.METRIC_STATE_CONFIRMED:
+                continue
+            s = m.get("score")
+            if not isinstance(s, (int, float)):
+                continue
+            for d in m.get("domains") or []:
+                acc.setdefault(d, []).append(float(s))
+        return {d: sum(v) / len(v) for d, v in acc.items()}
+
+    def save_observation(
+        self, submission_id: str, actor: str, *,
+        scenario: str, domains, duration: str, summary: str, notes: str, metrics: list,
+    ) -> dict:
+        """OT завершил разметку → сохраняем OBSERVATION (durable) и немедленно
+        удаляем сырое видео (no-retention). Доступ только при активной care-link."""
+        _require_region()
+        meta = self.read_submission(submission_id)
+        child_id = meta.get("child_id")
+        if not self.is_care_linked(actor, child_id):
+            self._append_audit("access_denied", submission_id=submission_id, actor=actor)
+            raise AccessDeniedError("нет активной care-link с этим ребёнком")
+        if scenario not in cfg.SCENARIO_IDS:
+            raise ValueError(f"неизвестный scenario: {scenario!r}")
+        doms = [d for d in (domains or []) if d in cfg.DOMAIN_IDS]
+        clean_metrics = []
+        for m in metrics or []:
+            st = m.get("state")
+            if st not in cfg.METRIC_STATES:
+                raise ValueError(f"неизвестный state метрики: {st!r}")
+            entry = {"label": str(m.get("label", "")), "value": str(m.get("value", "")), "state": st}
+            if isinstance(m.get("score"), (int, float)):
+                entry["score"] = m["score"]
+            md = [d for d in (m.get("domains") or []) if d in cfg.DOMAIN_IDS]
+            if md:
+                entry["domains"] = md
+            clean_metrics.append(entry)
+
+        obs_id = uuid.uuid4().hex
+        observation = {
+            "id": obs_id,
+            "child_id": child_id,
+            "submission_id": submission_id,
+            "display_code": meta.get("display_code"),
+            "scenario": scenario,
+            "domains": doms,
+            "duration": duration or "",
+            "summary": summary or "",
+            "notes": notes or "",
+            "metrics": clean_metrics,
+            "domain_scores": self._compute_domain_scores(clean_metrics),
+            "created_by": actor,
+            "created_at": _now_iso(),
+            # ns wall-clock for stable chronological ordering (created_at is only
+            # second-resolution; multiple observations can share a second).
+            "seq": time.time_ns(),
+        }
+        self._observations_dir(child_id).mkdir(parents=True, exist_ok=True)
+        _write_json_0600(self._observations_dir(child_id) / f"{obs_id}.json", observation)
+        self._append_audit(
+            "save_observation", submission_id=submission_id, child_id=child_id,
+            observation_id=obs_id, actor=actor,
+        )
+        # NO-RETENTION: raw video deleted now; the observation persists.
+        self.mark_reviewed_and_purge(submission_id)
+        return observation
+
+    def list_observations(self, child_id: str, *, confirmed_only: bool = False) -> list[dict]:
+        """Newest-first observation timeline. confirmed_only strips calibration
+        metrics (parent-facing view never shows in-calibration auto-metrics)."""
+        _validate_id(child_id, "child_id")
+        d = self._observations_dir(child_id)
+        if not d.exists():
+            return []
+        out = []
+        for f in d.iterdir():
+            if f.suffix != ".json":
+                continue
+            try:
+                o = _read_json(f)
+            except Exception:
+                continue
+            if confirmed_only:
+                o = {**o, "metrics": [m for m in o.get("metrics", []) if m.get("state") == cfg.METRIC_STATE_CONFIRMED]}
+            out.append(o)
+        out.sort(key=lambda o: (o.get("seq", 0), o.get("created_at", "")), reverse=True)
+        return out
+
+    def child_progress(self, child_id: str) -> dict:
+        """Per-domain {trend, filled, spark} from CONFIRMED observations only."""
+        _validate_id(child_id, "child_id")
+        obs = sorted(self.list_observations(child_id), key=lambda o: (o.get("seq", 0), o.get("created_at", "")))
+        per: dict[str, list[float]] = {d: [] for d in cfg.DOMAIN_IDS}
+        for o in obs:
+            for d, score in (o.get("domain_scores") or {}).items():
+                if d in per:
+                    per[d].append(score)
+        result = {}
+        for d, scores in per.items():
+            if not scores:
+                continue
+            last = scores[-1]
+            filled = max(0, min(6, round(last / 3 * 6)))
+            spark = [round(s) for s in scores[-5:]]
+            if len(scores) >= 2:
+                trend = "improving" if scores[-1] > scores[-2] else "declining" if scores[-1] < scores[-2] else "steady"
+            else:
+                trend = "steady"
+            result[d] = {"trend": trend, "filled": filled, "spark": spark}
+        return result
+
+    def _submissions_for_child(self, child_id: str) -> list[dict]:
+        if not cfg.SUBMISSIONS_DIR.exists():
+            return []
+        out = []
+        for d in cfg.SUBMISSIONS_DIR.iterdir():
+            sf = d / "submission.json"
+            if not sf.is_file():
+                continue
+            try:
+                meta = _read_json(sf)
+            except Exception:
+                continue
+            if meta.get("child_id") == child_id:
+                out.append(meta)
+        out.sort(key=lambda m: m.get("created_at", ""))
+        return out
+
+    def ot_children(self, actor: str) -> list[dict]:
+        """OT dashboard: care-linked children only, with mini-trend + last-video
+        status + last-observation date. Pseudonymous (display_code, no name/age)."""
+        _require_region()
+        out = []
+        for child_id in self.ot_child_ids(actor):
+            cf = self._child_dir(child_id) / "child.json"
+            if not cf.exists():
+                continue
+            display_code = _read_json(cf).get("display_code")
+            subs = self._submissions_for_child(child_id)
+            last_video = None
+            if subs:
+                latest = subs[-1]
+                st = latest.get("state")
+                last_video = "ready" if st in ("pending", "in_review") else "reviewed"
+            obs = self.list_observations(child_id)  # newest-first
+            progress = self.child_progress(child_id)
+            domains = {}
+            for d in cfg.DOMAIN_IDS:
+                domains[d] = progress.get(d, {"trend": "steady", "filled": 0, "spark": [0, 0, 0, 0, 0]})
+            out.append({
+                "child_id": child_id,
+                "display_code": display_code,
+                "last_video": last_video,
+                "last_obs": obs[0]["created_at"] if obs else None,
+                "domains": domains,
+            })
+        out.sort(key=lambda c: c.get("display_code") or "")
+        return out
+
+    def ot_queue(self, actor: str) -> list[dict]:
+        """Submissions for care-linked children, still annotatable (video present).
+        Minimised fields; pseudonymous."""
+        _require_region()
+        linked = set(self.ot_child_ids(actor))
+        if not linked or not cfg.SUBMISSIONS_DIR.exists():
+            return []
+        out = []
+        for d in cfg.SUBMISSIONS_DIR.iterdir():
+            sf = d / "submission.json"
+            if not sf.is_file():
+                continue
+            try:
+                meta = _read_json(sf)
+            except Exception:
+                continue
+            if meta.get("child_id") not in linked:
+                continue
+            if meta.get("video_purged") or meta.get("state") not in ("pending", "in_review"):
+                continue
+            out.append({
+                "submission_id": meta.get("submission_id"),
+                "display_code": meta.get("display_code"),
+                "scenario": meta.get("scenario"),
+                "size_bytes": meta.get("size_bytes"),
+                "state": meta.get("state"),
+                "created_at": meta.get("created_at"),
+            })
+        out.sort(key=lambda m: m.get("created_at", ""))
+        return out
+
+    # ------------------------------------------------------------------
     def record_consent(self, checked_ids, child_id: str | None = None) -> dict:
         """Сохранить запись согласия (explicit consent) при submit consent-формы.
 
@@ -356,7 +749,7 @@ class EphemeralMediaStore(MediaStore):
         return record
 
     # ------------------------------------------------------------------
-    def put(self, video, consent_record: dict, *, original_ext: str = ".mp4") -> str:
+    def put(self, video, consent_record: dict, *, original_ext: str = ".mp4", scenario: str | None = None) -> str:
         _require_region()
         if not isinstance(consent_record, dict) or not consent_record:
             raise ConsentRequiredError("видео нельзя принять без записи согласия")
@@ -397,6 +790,7 @@ class EphemeralMediaStore(MediaStore):
             "child_id": child_id,
             "display_code": display_code,
             "state": "pending",
+            "scenario": scenario if scenario in cfg.SCENARIO_IDS else None,
             "source_sha256": source_sha256,
             "original_ext": ext,
             "size_bytes": len(data),
