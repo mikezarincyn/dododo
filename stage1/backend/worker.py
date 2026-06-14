@@ -38,14 +38,27 @@ def fake_job(store, submission_id: str) -> None:
     return None
 
 
-def engine_job(store, submission_id: str) -> list:
-    """Этап B: прогнать клип корневым движком в подпроцессе и вернуть
-    НЕПОДТВЕРЖДЁННЫЕ (calibration) авто-метрики.
+def _recording_quality(coverage_pct) -> str | None:
+    """Грубая корзина качества СЪЁМКИ из % кадров с найденным ребёнком (про кадр,
+    не про ребёнка) — для безопасного родительского слоя."""
+    if coverage_pct is None:
+        return None
+    if coverage_pct >= 70:
+        return "good"
+    if coverage_pct >= 30:
+        return "partial"
+    return "low"
 
-    no-retention: расшифрованный клип и ВСЕ производные движка (overlay, csv,
-    meta, wav, whisper-temp) живут в одном workdir под /tmp и стираются в finally.
-    Сам зашифрованный клип НЕ трогаем — он нужен ОТ для просмотра; стирается
-    после разметки (mark_reviewed_and_purge) или при сбое (mark_failed)."""
+
+def engine_job(store, submission_id: str) -> dict:
+    """Этап B+: прогнать клип корневым движком в подпроцессе. Возвращает
+    {auto_metrics, recording_quality} и КЛАДЁТ эфемерно рядом с клипом overlay-видео
+    (скелет) + аналитический пакет для кабинета ОТ.
+
+    no-retention: расшифрованный клип и плейн-деривативы движка живут в одном workdir
+    под /tmp и стираются в finally. overlay + bundle шифруются в эфемерный каталог
+    submission (рядом с video.enc) → стираются ВМЕСТЕ с клипом на review/fail/abandon.
+    Сам клип не трогаем — он нужен ОТ для просмотра."""
     meta = store.read_submission(submission_id)
     scenario = meta.get("scenario") or "name"
     payload = store.decrypt_for_worker(submission_id)
@@ -70,10 +83,23 @@ def engine_job(store, submission_id: str) -> list:
         )
         if proc.returncode != 0:
             raise RuntimeError(f"worker_runner rc={proc.returncode}: {proc.stderr[-500:]}")
-        line = (proc.stdout or "").strip().splitlines()[-1] if proc.stdout.strip() else "{}"
-        return json.loads(line).get("auto_metrics", [])
+        out = json.loads((proc.stdout or "").strip().splitlines()[-1] if proc.stdout.strip() else "{}")
+        diag = out.get("diag") or {}
+
+        # Эфемерно сохранить overlay + аналитический пакет рядом с клипом (только ОТ).
+        overlay = workdir / "overlay.mp4"
+        if overlay.exists():
+            store.put_overlay(submission_id, overlay.read_bytes())
+        bundle_f = workdir / "bundle.json"
+        if bundle_f.exists():
+            store.put_analysis(submission_id, json.loads(bundle_f.read_text(encoding="utf-8")))
+
+        return {
+            "auto_metrics": out.get("auto_metrics", []),
+            "recording_quality": _recording_quality(diag.get("coverage_pct")),
+        }
     finally:
-        # no-retention: стереть расшифрованный клип + все деривативы движка.
+        # no-retention: стереть расшифрованный клип + все плейн-деривативы движка.
         shutil.rmtree(workdir, ignore_errors=True)
 
 
@@ -84,8 +110,12 @@ def process_submission(store, submission_id: str, *, job=None) -> str:
     ready (клип сохраняется для ОТ). На ошибке — failed (клип стирается)."""
     job = job or fake_job
     try:
-        auto_metrics = job(store, submission_id)
-        store.mark_ready(submission_id, auto_metrics=auto_metrics)
+        result = job(store, submission_id)
+        if isinstance(result, dict):
+            store.mark_ready(submission_id, auto_metrics=result.get("auto_metrics"),
+                             recording_quality=result.get("recording_quality"))
+        else:
+            store.mark_ready(submission_id, auto_metrics=result)
         return cfg.SUB_STATE_READY
     except Exception as exc:  # noqa: BLE001 — любая ошибка обработки → failed+purge
         log.exception("processing failed for submission %s", submission_id)

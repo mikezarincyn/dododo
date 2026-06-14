@@ -36,8 +36,12 @@ import crypto
 import stage1_config as cfg
 import video_norm
 
-# --- Имя зашифрованного видео внутри эфемерного каталога submission ---
+# --- Имена зашифрованных артефактов внутри эфемерного каталога submission ---
+# Все лежат в _ephemeral_dir(sid) рядом с video.enc → _purge_video_bytes (rmtree
+# всего каталога) стирает их ВМЕСТЕ с клипом на review/fail/abandon (no-retention).
 _ENC_VIDEO_NAME = "video.enc"
+_ENC_ANALYSIS_NAME = "analysis.enc"   # аналитический пакет ОТ (графики/события/транскрипт)
+_ENC_OVERLAY_NAME = "overlay.enc"     # видео со скелетом (движок рендерит)
 
 # --- Валидация id (порт из storage.py) ---
 _ID_RE = re.compile(r"^[0-9a-f]{32}$")
@@ -983,6 +987,65 @@ class EphemeralMediaStore(MediaStore):
             "display_code": meta.get("display_code"),
         }
 
+    def _write_ephemeral(self, path: Path, blob: bytes) -> None:
+        """Записать зашифрованный артефакт в эфемерный каталог с правами 0600."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            path.parent.chmod(0o700)
+        except OSError:
+            pass
+        prev = os.umask(0o077)
+        try:
+            path.write_bytes(blob)
+        finally:
+            os.umask(prev)
+        try:
+            path.chmod(0o600)
+        except OSError:
+            pass
+
+    def put_analysis(self, submission_id: str, bundle: dict) -> None:
+        """Зашифровать аналитический пакет ОТ рядом с клипом (эфемерно). Стирается
+        вместе с клипом (_purge_video_bytes rmtree всего каталога)."""
+        _require_region()
+        edir = self._ephemeral_dir(submission_id)
+        data = json.dumps(bundle, ensure_ascii=False).encode("utf-8")
+        blob = crypto.encrypt(data, submission_id.encode("ascii"))
+        self._write_ephemeral(edir / _ENC_ANALYSIS_NAME, blob)
+
+    def put_overlay(self, submission_id: str, mp4_bytes: bytes) -> None:
+        """Зашифровать overlay-видео (скелет) рядом с клипом (эфемерно)."""
+        _require_region()
+        edir = self._ephemeral_dir(submission_id)
+        blob = crypto.encrypt(mp4_bytes, submission_id.encode("ascii"))
+        self._write_ephemeral(edir / _ENC_OVERLAY_NAME, blob)
+
+    def read_analysis(self, submission_id: str) -> dict:
+        """Расшифровать аналитический пакет для кабинета ОТ. НЕ меняет state и НЕ
+        «забирает» запись (это часть просмотра, не сам клип). 410 если уже стёрт."""
+        _require_region()
+        meta = self.read_submission(submission_id)
+        if meta.get("video_purged"):
+            raise VideoUnavailableError(f"аналитический пакет {submission_id} уже удалён")
+        p = self._ephemeral_dir(submission_id) / _ENC_ANALYSIS_NAME
+        if not p.exists():
+            raise VideoUnavailableError(f"аналитический пакет {submission_id} отсутствует")
+        data = crypto.decrypt(p.read_bytes(), submission_id.encode("ascii"))
+        self._append_audit("read_analysis", submission_id=submission_id)
+        return json.loads(data)
+
+    def read_overlay(self, submission_id: str) -> bytes:
+        """Расшифровать overlay-видео (скелет) для кабинета ОТ. НЕ меняет state."""
+        _require_region()
+        meta = self.read_submission(submission_id)
+        if meta.get("video_purged"):
+            raise VideoUnavailableError(f"overlay {submission_id} уже удалён")
+        p = self._ephemeral_dir(submission_id) / _ENC_OVERLAY_NAME
+        if not p.exists():
+            raise VideoUnavailableError(f"overlay {submission_id} отсутствует")
+        self._append_audit("read_overlay", submission_id=submission_id)
+        return crypto.decrypt(p.read_bytes(), submission_id.encode("ascii"))
+
     def decrypt_for_worker(self, submission_id: str) -> dict:
         """Расшифровать байты видео для фоновой обработки. В отличие от
         get_for_review: НЕ меняет state и НЕ «забирает» запись на reviewer —
@@ -1232,10 +1295,13 @@ class EphemeralMediaStore(MediaStore):
         self._append_audit("claim_for_processing", submission_id=submission_id)
         return True
 
-    def mark_ready(self, submission_id: str, auto_metrics: list | None = None) -> None:
+    def mark_ready(self, submission_id: str, auto_metrics: list | None = None,
+                   recording_quality: str | None = None) -> None:
         """Обработка завершена: метрики извлечены, клип ждёт ОТ. Видео НЕ стираем —
         ОТ ещё должен его посмотреть. auto_metrics — неподтверждённые подсказки
-        (calibration), кладутся на submission; в тренды НЕ идут (см. Этап B)."""
+        (calibration), кладутся на submission; в тренды НЕ идут (см. Этап B).
+        recording_quality — грубая корзина качества СЪЁМКИ (good/partial/low) для
+        безопасного родительского слоя (это про кадр/камеру, не про ребёнка)."""
         _require_region()
         meta = self.read_submission(submission_id)
         meta["state"] = cfg.SUB_STATE_READY
@@ -1243,6 +1309,8 @@ class EphemeralMediaStore(MediaStore):
         meta["updated_at"] = _now_iso()
         if auto_metrics is not None:
             meta["auto_metrics"] = auto_metrics
+        if recording_quality is not None:
+            meta["recording_quality"] = recording_quality
         _write_json_0600(self._submission_file(submission_id), meta)
         self._append_audit("mark_ready", submission_id=submission_id)
 

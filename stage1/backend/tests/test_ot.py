@@ -126,6 +126,52 @@ def test_ot_video_forbidden_without_care_link(sandbox, monkeypatch):
     assert client.get(f"/api/ot/video/{sid}", headers=OT2).status_code == 403
 
 
+# ---------- OT analysis bundle + overlay (Stage 0), OT-only, care-link scoped ----------
+
+def _store_bundle(store, sid):
+    """Simulate the worker having produced the ephemeral bundle + overlay."""
+    store.put_analysis(sid, {"version": 1, "series": {"head_turn": {"t": [0.0], "v": [0.2]}}, "events": {"calls": [1.0]}})
+    store.put_overlay(sid, b"OVERLAY-BYTES")
+
+
+def test_ot_analysis_and_overlay_for_linked_ot(sandbox, monkeypatch, store):
+    client = _app(monkeypatch)
+    child_id, _ = _add_child(client)
+    sid = _upload(client, child_id)
+    _link(client, child_id)
+    _store_bundle(store, sid)
+
+    a = client.get(f"/api/ot/analysis/{sid}", headers=OT)
+    assert a.status_code == 200 and a.json()["version"] == 1 and a.json()["events"]["calls"] == [1.0]
+    o = client.get(f"/api/ot/overlay/{sid}", headers=OT)
+    assert o.status_code == 200 and o.content == b"OVERLAY-BYTES"
+    assert o.headers["content-disposition"] == "inline"
+
+
+def test_ot_analysis_forbidden_without_care_link(sandbox, monkeypatch, store):
+    client = _app(monkeypatch)
+    child_id, _ = _add_child(client)
+    sid = _upload(client, child_id)
+    _link(client, child_id, actor="ot_a")
+    _store_bundle(store, sid)
+    # ot_b not linked → 403; a non-reviewer (parent header, no principal) → 401.
+    assert client.get(f"/api/ot/analysis/{sid}", headers=OT2).status_code == 403
+    assert client.get(f"/api/ot/overlay/{sid}", headers=OT2).status_code == 403
+    assert client.get(f"/api/ot/analysis/{sid}", headers={"X-Parent-Id": PA}).status_code == 401
+
+
+def test_ot_analysis_gone_after_review(sandbox, monkeypatch, store):
+    client = _app(monkeypatch)
+    child_id, _ = _add_child(client)
+    sid = _upload(client, child_id)
+    _link(client, child_id)
+    _store_bundle(store, sid)
+    assert _annotate(client, sid).status_code == 200  # → mark_reviewed_and_purge
+    # Bundle + overlay purged together with the clip (no-retention) → 410.
+    assert client.get(f"/api/ot/analysis/{sid}", headers=OT).status_code == 410
+    assert client.get(f"/api/ot/overlay/{sid}", headers=OT).status_code == 410
+
+
 # ---------- no-retention: video purged, observation kept ----------
 
 def test_after_annotate_video_purged_observation_kept(sandbox, monkeypatch, store):

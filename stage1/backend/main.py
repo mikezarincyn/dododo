@@ -471,6 +471,9 @@ def create_app(*, enforce_https: bool | None = None) -> FastAPI:
                     "size_bytes": m.get("size_bytes"),
                     "state": m.get("state"),
                     "video_purged": m.get("video_purged", False),
+                    # БЕЗОПАСНО для родителя: грубое качество СЪЁМКИ (про кадр, не про
+                    # ребёнка). Никаких метрик/сигналов/суждений сюда не добавлять.
+                    "recording_quality": m.get("recording_quality"),
                     "created_at": m.get("created_at"),
                 })
         out.sort(key=lambda m: m.get("created_at") or "")
@@ -538,6 +541,52 @@ def create_app(*, enforce_https: bool | None = None) -> FastAPI:
         return Response(
             content=out["video_bytes"],
             media_type=mime,
+            headers={
+                "Content-Disposition": "inline",
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    @app.get("/api/ot/analysis/{submission_id}")
+    def ot_analysis(
+        submission_id: str,
+        principal: Principal = Depends(require_reviewer),
+        store: MediaStore = Depends(get_media_store),
+    ):
+        """Эфемерный аналитический пакет для кабинета ОТ (графики/события/транскрипт/
+        латентности). ТОЛЬКО ОТ: require_reviewer (parent-сессия сюда не проходит) +
+        care-link. Не меняет state. Живёт пока живёт клип; после разметки → 410."""
+        try:
+            meta = store.read_submission(submission_id)
+        except SubmissionNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        _require_linked(store, principal, meta.get("child_id"))
+        try:
+            return store.read_analysis(submission_id)
+        except VideoUnavailableError as e:
+            raise HTTPException(status_code=410, detail=str(e))
+
+    @app.get("/api/ot/overlay/{submission_id}")
+    def ot_overlay(
+        submission_id: str,
+        principal: Principal = Depends(require_reviewer),
+        store: MediaStore = Depends(get_media_store),
+    ):
+        """Эфемерное overlay-видео (скелет) для кабинета ОТ. ТОЛЬКО ОТ + care-link.
+        Inline, no-store. Живёт пока живёт клип; после разметки → 410."""
+        try:
+            meta = store.read_submission(submission_id)
+        except SubmissionNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        _require_linked(store, principal, meta.get("child_id"))
+        try:
+            data = store.read_overlay(submission_id)
+        except VideoUnavailableError as e:
+            raise HTTPException(status_code=410, detail=str(e))
+        return Response(
+            content=data,
+            media_type="video/mp4",
             headers={
                 "Content-Disposition": "inline",
                 "Cache-Control": "no-store",

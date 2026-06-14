@@ -22,15 +22,23 @@ def _new(store):
     return store.put(PLAINTEXT, dict(VALID_CONSENT))
 
 
-def _fake_runner(monkeypatch, *, returncode=0, auto_metrics=None, capture=None):
-    """Подменить subprocess.run воркера: имитируем worker_runner без ML.
-    capture (dict) получает workdir, чтобы проверить очистку no-retention."""
-    payload = {"auto_metrics": auto_metrics or [], "diag": {}}
+FAKE_BUNDLE = {"version": 1, "series": {"head_turn": {"t": [0.0], "v": [0.1]}}, "events": {"calls": [1.2]}}
+
+
+def _fake_runner(monkeypatch, *, returncode=0, auto_metrics=None, capture=None,
+                 coverage_pct=80.0, write_artifacts=True):
+    """Подменить subprocess.run воркера: имитируем worker_runner без ML — пишет
+    overlay.mp4 + bundle.json в workdir и печатает stdout с diag.coverage_pct."""
+    payload = {"auto_metrics": auto_metrics or [], "diag": {"coverage_pct": coverage_pct}}
 
     def fake_run(cmd, **kwargs):
+        workdir = Path(cmd[4])
         if capture is not None:
             capture["video_path"] = cmd[2]
             capture["workdir"] = cmd[4]
+        if returncode == 0 and write_artifacts:
+            (workdir / "overlay.mp4").write_bytes(b"OVERLAY-MP4-BYTES")
+            (workdir / "bundle.json").write_text(json.dumps(FAKE_BUNDLE), encoding="utf-8")
         out = json.dumps(payload) if returncode == 0 else ""
         return types.SimpleNamespace(returncode=returncode, stdout=out, stderr="boom")
 
@@ -163,18 +171,46 @@ def test_engine_job_returns_metrics_and_cleans_workdir(store, monkeypatch):
     cap = {}
     _fake_runner(monkeypatch, auto_metrics=AUTO, capture=cap)
 
-    metrics = worker.engine_job(store, sid)
-    assert metrics == AUTO
-    # Расшифрованный клип + деривативы движка стёрты (no-retention).
+    result = worker.engine_job(store, sid)
+    assert result["auto_metrics"] == AUTO
+    assert result["recording_quality"] == "good"  # coverage 80% → good
+    # Плейн-деривативы движка стёрты; зашифрованный клип + пакет + overlay остались.
     assert not Path(cap["workdir"]).exists()
-    # Сам зашифрованный клип сохранён — он нужен ОТ для просмотра.
-    assert store._ephemeral_dir(sid).exists()
+    edir = store._ephemeral_dir(sid)
+    assert (edir / "video.enc").exists()
+    assert (edir / "analysis.enc").exists()
+    assert (edir / "overlay.enc").exists()
     assert store.read_submission(sid).get("video_purged") is False
+
+
+def test_analysis_bundle_and_overlay_round_trip(store, monkeypatch):
+    sid = _new(store)
+    _fake_runner(monkeypatch, auto_metrics=AUTO)
+    worker.engine_job(store, sid)
+    # Пакет расшифровывается обратно в тот же dict; overlay — те же байты.
+    assert store.read_analysis(sid) == FAKE_BUNDLE
+    assert store.read_overlay(sid) == b"OVERLAY-MP4-BYTES"
+
+
+def test_bundle_and_overlay_purged_with_clip(store, monkeypatch):
+    sid = _new(store)
+    _fake_runner(monkeypatch, auto_metrics=AUTO)
+    worker.run_pending(store, job=worker.engine_job)
+    assert store.read_submission(sid)["state"] == cfg.SUB_STATE_READY
+    # После разметки клип + пакет + overlay стёрты ВМЕСТЕ (no-retention).
+    store.mark_reviewed_and_purge(sid)
+    assert not store._ephemeral_dir(sid).exists()
+    import pytest as _pt
+    from media_store import VideoUnavailableError
+    with _pt.raises(VideoUnavailableError):
+        store.read_analysis(sid)
+    with _pt.raises(VideoUnavailableError):
+        store.read_overlay(sid)
 
 
 def test_engine_job_via_run_pending_marks_ready_with_auto_metrics(store, monkeypatch):
     sid = _new(store)
-    _fake_runner(monkeypatch, auto_metrics=AUTO)
+    _fake_runner(monkeypatch, auto_metrics=AUTO, coverage_pct=20.0)
 
     n = worker.run_pending(store, job=worker.engine_job)
     assert n == 1
@@ -183,6 +219,8 @@ def test_engine_job_via_run_pending_marks_ready_with_auto_metrics(store, monkeyp
     # Авто-метрики легли на submission НЕПОДТВЕРЖДЁННЫМИ (calibration).
     assert meta["auto_metrics"] == AUTO
     assert all(m["state"] == cfg.METRIC_STATE_CALIBRATION for m in meta["auto_metrics"])
+    # Грубая корзина качества съёмки для родителя (20% → low).
+    assert meta["recording_quality"] == "low"
 
 
 def test_engine_job_failure_purges_video(store, monkeypatch):

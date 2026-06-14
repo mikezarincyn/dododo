@@ -42,6 +42,8 @@ def test_protected_endpoints_need_a_session(sandbox, monkeypatch):
         "/api/ot/children",
         "/api/ot/queue",
         "/api/ot/video/" + "a" * 32,
+        "/api/ot/analysis/" + "a" * 32,
+        "/api/ot/overlay/" + "a" * 32,
         "/api/console/queue",
         "/api/admin/overview",
     ]
