@@ -104,6 +104,18 @@ class LoginIn(BaseModel):
     password: str
 
 
+class AdminUserIn(BaseModel):
+    email: str
+    password: str
+    name: str
+    hcpc: str | None = None
+
+
+class AdminCareLinkIn(BaseModel):
+    child_id: str
+    ot_id: str
+
+
 # Pilot parent identity: a client-held opaque id (uuid4 hex) in the X-Parent-Id
 # header. No parent IdP yet — scoping is by this id (a parent sees only its own
 # children). TODO-LAWYER/FOUNDER: real verifiable parent auth before GA; until
@@ -505,6 +517,105 @@ def create_app(*, enforce_https: bool | None = None) -> FastAPI:
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e))
         return rec
+
+    # ---- Админка (управление людьми и связками) ----
+
+    def _child_counts(store: MediaStore):
+        """(children_total, per_parent_id, per_ot_actor) from the admin child join."""
+        rows = store.all_parent_children()
+        per_parent: dict[str, int] = {}
+        per_ot: dict[str, int] = {}
+        for c in rows:
+            per_parent[c["parent_id"]] = per_parent.get(c["parent_id"], 0) + 1
+            for l in c["care_links"]:
+                per_ot[l["actor_id"]] = per_ot.get(l["actor_id"], 0) + 1
+        return rows, per_parent, per_ot
+
+    @app.get("/api/admin/overview")
+    def admin_overview(_: Principal = Depends(require_admin), store: MediaStore = Depends(get_media_store)):
+        ots = users.list_users(cfg.ROLE_OT)
+        return {
+            "parents": len(users.list_users(cfg.ROLE_PARENT)),
+            "therapists": len(ots),
+            "pending_ot": len([u for u in ots if u.get("status") == "pending"]),
+            "children": len(store.all_parent_children()),
+            "active_care_links": store.count_active_care_links(),
+        }
+
+    @app.get("/api/admin/therapists")
+    def admin_therapists(_: Principal = Depends(require_admin), store: MediaStore = Depends(get_media_store)):
+        _, _, per_ot = _child_counts(store)
+        return {"therapists": [{**users.public_view(u), "children": per_ot.get(u["id"], 0)} for u in users.list_users(cfg.ROLE_OT)]}
+
+    @app.post("/api/admin/therapists")
+    def admin_create_therapist(payload: AdminUserIn, _: Principal = Depends(require_admin)):
+        try:
+            u = users.create_user(payload.email, payload.password, cfg.ROLE_OT, payload.name, status="active", hcpc=payload.hcpc)
+        except users.EmailTakenError:
+            raise HTTPException(status_code=409, detail="email already registered")
+        except users.UserError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        return {"user": users.public_view(u)}
+
+    @app.post("/api/admin/users/{user_id}/status")
+    def admin_set_status(user_id: str, body: dict, _: Principal = Depends(require_admin)):
+        """Approve (pending→active), deactivate, or reactivate any user."""
+        status = body.get("status")
+        try:
+            u = users.set_status(user_id, status)
+        except users.UserError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        return {"user": users.public_view(u)}
+
+    @app.get("/api/admin/parents")
+    def admin_parents(_: Principal = Depends(require_admin), store: MediaStore = Depends(get_media_store)):
+        _, per_parent, _ = _child_counts(store)
+        return {"parents": [{**users.public_view(u), "children": per_parent.get(u["id"], 0)} for u in users.list_users(cfg.ROLE_PARENT)]}
+
+    @app.post("/api/admin/parents")
+    def admin_create_parent(payload: AdminUserIn, _: Principal = Depends(require_admin)):
+        try:
+            u = users.create_user(payload.email, payload.password, cfg.ROLE_PARENT, payload.name, status="active")
+        except users.EmailTakenError:
+            raise HTTPException(status_code=409, detail="email already registered")
+        except users.UserError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        return {"user": users.public_view(u)}
+
+    @app.get("/api/admin/children")
+    def admin_children(_: Principal = Depends(require_admin), store: MediaStore = Depends(get_media_store)):
+        """Children with their parent (name/email — admin bridge) and assigned OT."""
+        rows = store.all_parent_children()
+        out = []
+        for c in rows:
+            p = users.get_by_id(c["parent_id"]) if c.get("parent_id") else None
+            out.append({
+                "child_id": c["child_id"],
+                "display_code": c["display_code"],
+                "first_name": c["first_name"],
+                "parent_name": p["name"] if p else None,
+                "parent_email": p["email"] if p else None,
+                "assigned": c["care_links"],
+            })
+        return {"children": out}
+
+    @app.post("/api/admin/care-links")
+    def admin_assign_care_link(payload: AdminCareLinkIn, _: Principal = Depends(require_admin), store: MediaStore = Depends(get_media_store)):
+        ot = users.get_by_id(payload.ot_id)
+        if not ot or ot.get("role") != cfg.ROLE_OT:
+            raise HTTPException(status_code=404, detail="therapist not found")
+        try:
+            store.create_care_link(payload.child_id, ot["id"], ot_name=ot.get("name"))
+        except SubmissionNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        return {"ok": True}
+
+    @app.post("/api/admin/care-links/revoke")
+    def admin_revoke_care_link(payload: AdminCareLinkIn, _: Principal = Depends(require_admin), store: MediaStore = Depends(get_media_store)):
+        store.revoke_care_link(payload.child_id, payload.ot_id)
+        return {"ok": True}
 
     # ---- Консоль специалиста (P4) ----
 

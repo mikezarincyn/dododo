@@ -480,6 +480,62 @@ class EphemeralMediaStore(MediaStore):
                 return l.get("ot_name")
         return None
 
+    def revoke_care_link(self, child_id: str, reviewer_actor: str) -> dict:
+        rec = self._read_care_link(child_id)
+        changed = False
+        for l in rec.get("links", []):
+            if l.get("actor_id") == reviewer_actor and l.get("status") == "active":
+                l["status"] = "revoked"
+                l["revoked_at"] = _now_iso()
+                changed = True
+        if changed:
+            _write_json_0600(self._care_link_file(child_id), rec)
+            self._append_audit("revoke_care_link", child_id=child_id, reviewer_actor=reviewer_actor)
+        return rec
+
+    def count_active_care_links(self) -> int:
+        if not cfg.CARE_LINKS_DIR.exists():
+            return 0
+        n = 0
+        for f in cfg.CARE_LINKS_DIR.iterdir():
+            if f.suffix != ".json":
+                continue
+            try:
+                rec = _read_json(f)
+            except Exception:
+                continue
+            if any(l.get("status") == "active" for l in rec.get("links", [])):
+                n += 1
+        return n
+
+    def all_parent_children(self) -> list[dict]:
+        """ADMIN-only join: every child across all parents with its owning parent_id,
+        private first name, and active care-link OT actors. Admin manages links, so
+        needs this bridge; the OT view stays code-only (this is never exposed to OT)."""
+        out: list[dict] = []
+        if not cfg.PARENTS_DIR.exists():
+            return out
+        for pdir in cfg.PARENTS_DIR.iterdir():
+            if not pdir.is_dir():
+                continue
+            for f in pdir.iterdir():
+                if f.suffix != ".json" or f.name == "invites.json":
+                    continue
+                try:
+                    prof = _read_json(f)
+                except Exception:
+                    continue
+                active = [l for l in self._read_care_link(prof["child_id"]).get("links", []) if l.get("status") == "active"]
+                out.append({
+                    "child_id": prof.get("child_id"),
+                    "display_code": prof.get("display_code"),
+                    "parent_id": prof.get("parent_id"),
+                    "first_name": prof.get("first_name"),
+                    "care_links": [{"actor_id": l.get("actor_id"), "ot_name": l.get("ot_name")} for l in active],
+                })
+        out.sort(key=lambda c: c.get("display_code") or "")
+        return out
+
     # ------------------------------------------------------------------
     # Observations (durable; survive video purge — no-retention). Pseudonymous:
     # no child name, only domains/metrics/summary. Stored under the child dir.
