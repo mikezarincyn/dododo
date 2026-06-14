@@ -41,6 +41,17 @@ export function OtArea({
     refresh();
   }, [refresh]);
 
+  // While any clip is still being processed (queued/processing), poll so the OT
+  // sees it flip to "ready" without a manual refresh. Stops when nothing is in flight.
+  const inFlight = queue.some((q) => q.state === "queued" || q.state === "processing");
+  useEffect(() => {
+    if (!inFlight) return;
+    const id = setInterval(() => api.queue().then(setQueue).catch(() => undefined), 5000);
+    return () => clearInterval(id);
+  }, [inFlight, api]);
+
+  const readyCount = queue.filter((q) => q.state === "ready").length;
+
   // Load per-child observations + progress when viewing progress/obs.
   const childId = params.childId || "";
   useEffect(() => {
@@ -74,7 +85,7 @@ export function OtArea({
   if (screen === "annotate") {
     const item = queue.find((q) => q.submission_id === params.submissionId);
     if (!item) return <Queue t={t} go={go} mode="ot" items={queue} />;
-    return <Annotation t={t} go={go} item={item} annotate={(sid, payload) => api.annotate(sid, payload).then((o) => { refresh(); return o; })} toast={toast} />;
+    return <Annotation t={t} go={go} item={item} loadVideo={api.loadVideo} annotate={(sid, payload) => api.annotate(sid, payload).then((o) => { refresh(); return o; })} toast={toast} />;
   }
   if (screen === "progress") {
     const child = children.find((c) => c.child_id === childId) || { child_id: childId, display_code: "—" };
@@ -88,5 +99,5 @@ export function OtArea({
     if (!obs) return <ChildProgress t={t} go={go} child={child} progress={data.progress} observations={data.observations} />;
     return <ObservationDetail t={t} go={go} child={child} obs={obs} />;
   }
-  return <OtDashboard t={t} userName={userName} go={go} children={children} />;
+  return <OtDashboard t={t} userName={userName} go={go} children={children} readyCount={readyCount} />;
 }

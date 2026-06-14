@@ -509,6 +509,42 @@ def create_app(*, enforce_https: bool | None = None) -> FastAPI:
     ):
         return {"items": store.ot_queue(principal.actor_id)}
 
+    @app.get("/api/ot/video/{submission_id}")
+    def ot_video(
+        submission_id: str,
+        principal: Principal = Depends(require_reviewer),
+        store: MediaStore = Depends(get_media_store),
+    ):
+        """Поток расшифрованного клипа для разметки ОТ. Дуал-аут (cookie-сессия ОТ
+        или legacy Bearer) уже в require_reviewer; здесь дополнительно проверяем
+        активную care-link с ребёнком (scope), затем get_for_review (claim + in_review).
+        Видео живёт до конца разметки; стирается в save_observation (no-retention)."""
+        try:
+            meta = store.read_submission(submission_id)
+        except SubmissionNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        _require_linked(store, principal, meta.get("child_id"))
+        try:
+            out = store.get_for_review(submission_id, actor=principal.actor_id)
+        except AccessDeniedError as e:
+            raise HTTPException(status_code=403, detail=str(e))
+        except VideoUnavailableError as e:
+            raise HTTPException(status_code=410, detail=str(e))
+        except SubmissionNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        mime = _VIDEO_MIME.get(out.get("original_ext"), "application/octet-stream")
+        return Response(
+            content=out["video_bytes"],
+            media_type=mime,
+            headers={
+                "Content-Disposition": "inline",
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
     @app.get("/api/ot/child/{child_id}/observations")
     def ot_child_observations(
         child_id: str,

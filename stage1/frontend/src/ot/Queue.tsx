@@ -39,7 +39,11 @@ export function Queue({
       ) : (
         <div className="col" style={{ gap: 14 }}>
           {items.map((u) => {
-            const ready = (u.state === "pending" || u.state === "in_review") && !u.video_purged;
+            // Real async phase from the submission state.
+            const purged = !!u.video_purged;
+            const processing = !purged && (u.state === "queued" || u.state === "processing");
+            const ready = !purged && (u.state === "ready" || u.state === "in_review");
+            const failed = u.state === "failed";
             const sizeMb = u.size_bytes ? `${Math.max(1, Math.round(u.size_bytes / (1024 * 1024)))} MB` : "";
             return (
               <div key={u.submission_id} style={{ background: "var(--white)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-card)", padding: 20 }}>
@@ -52,11 +56,19 @@ export function Queue({
                       <span className="code-chip">{u.display_code}</span>
                       {u.scenario ? <span style={{ fontSize: 13.5, color: "var(--text-muted)", fontWeight: 600 }}>{scenarioLabel(t, u.scenario)}</span> : null}
                     </div>
-                    <div style={{ fontSize: 13.5, color: "var(--text-muted)", marginTop: 4 }}>{sizeMb}</div>
+                    <div style={{ fontSize: 13.5, color: "var(--text-muted)", marginTop: 4 }}>
+                      {processing && mode === "parent" ? t("queue.processingHint") : sizeMb}
+                    </div>
                   </div>
                   <div className="col" style={{ alignItems: "flex-end", gap: 10, flexShrink: 0 }}>
-                    {ready ? (
+                    {processing ? (
+                      <StatusBadge state="processing" t={t} />
+                    ) : ready ? (
                       <StatusBadge state="ready" t={t} />
+                    ) : failed ? (
+                      <span className="chip" style={{ background: "rgba(238,108,77,.14)", color: "var(--coral-500)" }}>
+                        <Icon name="alert-triangle" size={13} /> {t("queue.failed")}
+                      </span>
                     ) : (
                       <span className="chip" style={{ background: "var(--grey-surface-100)", color: "var(--text-muted)" }}>
                         <Icon name="check" size={13} /> {t("Reviewed")}

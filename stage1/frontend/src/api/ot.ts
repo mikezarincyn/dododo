@@ -69,6 +69,7 @@ export interface OtApi {
   progress(childId: string): Promise<Record<string, DomainTrend>>;
   annotate(submissionId: string, payload: AnnotatePayload): Promise<Observation>;
   submitVideo(childId: string, scenario: string, file: File): Promise<{ submission_id: string }>;
+  loadVideo(submissionId: string): Promise<Blob>;
 }
 
 export const otApi: OtApi = {
@@ -94,5 +95,10 @@ export const otApi: OtApi = {
     fd.append("scenario", scenario);
     const r = await fetch("/api/submissions", { method: "POST", credentials: "include", body: fd });
     return ok<{ submission_id: string }>(r);
+  },
+  async loadVideo(submissionId) {
+    const r = await fetch(`/api/ot/video/${submissionId}`, GET);
+    if (!r.ok) throw new Error(`video ${r.status}`);
+    return await r.blob();
   },
 };

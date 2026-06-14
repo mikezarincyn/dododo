@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Annotation } from "./Annotation";
@@ -9,16 +9,16 @@ import type { AnnotatePayload, Observation } from "../api/ot";
 import type { QueueRow } from "./Queue";
 
 const t = makeT("en");
-const ITEM: QueueRow = { submission_id: "s1", display_code: "CH-AAAAAA", scenario: "name", size_bytes: 1, state: "pending", created_at: "" };
+const ITEM: QueueRow = { submission_id: "s1", display_code: "CH-AAAAAA", scenario: "name", size_bytes: 1, state: "ready", created_at: "" };
 
-function setup() {
+function setup(loadVideo = vi.fn(async () => new Blob(["v"], { type: "video/mp4" }))) {
   const annotate = vi.fn(async (_submissionId: string, _payload: AnnotatePayload): Promise<Observation> => ({
     id: "o1", child_id: "c1", display_code: "CH-AAAAAA", scenario: "name", domains: ["attention"],
     duration: "1:42", summary: "", notes: "", metrics: [], domain_scores: {}, created_at: "",
   }));
   const go = vi.fn();
-  render(<Annotation t={t} go={go} item={ITEM} annotate={annotate} toast={() => {}} />);
-  return { annotate, go };
+  render(<Annotation t={t} go={go} item={ITEM} annotate={annotate} loadVideo={loadVideo} toast={() => {}} />);
+  return { annotate, go, loadVideo };
 }
 
 function answerAll(user: ReturnType<typeof userEvent.setup>) {
@@ -70,5 +70,17 @@ describe("Annotation anti-anchoring", () => {
     expect(payload.metrics.filter((m) => m.state === "confirmed").length).toBeGreaterThanOrEqual(AN_ITEMS.length);
     expect(payload.metrics.some((m) => m.state === "calibration")).toBe(true);
     expect(go).toHaveBeenCalledWith("progress", { childId: "c1" });
+  });
+
+  it("streams the real clip into a <video> player (not a placeholder)", async () => {
+    const loadVideo = vi.fn(async () => new Blob(["v"], { type: "video/mp4" }));
+    setup(loadVideo);
+    expect(loadVideo).toHaveBeenCalledWith("s1");
+    await waitFor(() => expect(document.querySelector('video[data-testid="annot-video"]')).not.toBeNull());
+  });
+
+  it("shows an error if the clip is gone", async () => {
+    setup(vi.fn(async () => { throw new Error("410"); }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(t("annot.videoError")));
   });
 });

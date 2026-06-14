@@ -19,11 +19,13 @@ export function OtDashboard({
   userName,
   go,
   children,
+  readyCount = 0,
 }: {
   t: TFunc;
   userName?: string;
   go: (screen: string, params?: Record<string, string>) => void;
   children: OtChild[];
+  readyCount?: number;
 }) {
   return (
     <div>
@@ -32,9 +34,17 @@ export function OtDashboard({
         b={userName?.trim() || t("ot.dash.title.b")}
         sub={`${children.length} ${t("ot.dash.sub")}`}
         right={
-          <Button variant="primary" size="sm" onClick={() => go("upload")} iconRight={<Icon name="upload" size={16} color="#fff" />}>
-            {t("ot.dash.upload")}
-          </Button>
+          <div className="row" style={{ gap: 12 }}>
+            {readyCount > 0 ? (
+              <button type="button" className="chip" onClick={() => go("queue")}
+                style={{ background: "var(--green-100)", color: "var(--green-ink)", border: "none", cursor: "pointer", fontWeight: 700 }}>
+                <Icon name="film" size={14} /> {readyCount} {t("ot.dash.ready")}
+              </button>
+            ) : null}
+            <Button variant="primary" size="sm" onClick={() => go("upload")} iconRight={<Icon name="upload" size={16} color="#fff" />}>
+              {t("ot.dash.upload")}
+            </Button>
+          </div>
         }
       />
 

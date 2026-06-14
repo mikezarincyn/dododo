@@ -49,6 +49,15 @@ export function ParentArea({
     refreshSubmissions();
   }, [refreshChildren, refreshInvites, refreshSubmissions]);
 
+  // Poll while a clip is still being processed so the parent sees it flip from
+  // "processing" to "processed / awaiting therapist" without a manual refresh.
+  const inFlight = submissions.some((s) => s.state === "queued" || s.state === "processing");
+  useEffect(() => {
+    if (!inFlight) return;
+    const id = setInterval(refreshSubmissions, 5000);
+    return () => clearInterval(id);
+  }, [inFlight, refreshSubmissions]);
+
   // How many videos the therapist has reviewed for this child (confirmed-only,
   // count only — no clinical detail reaches the parent gentle view).
   const progressChildId = screen === "progress" ? params.childId : "";

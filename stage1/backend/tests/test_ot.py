@@ -102,6 +102,30 @@ def test_annotate_requires_care_link(sandbox, monkeypatch):
     assert _annotate(client, sid).status_code == 403
 
 
+# ---------- OT video streaming (Stage C player), care-link scoped ----------
+
+def test_ot_video_streams_for_linked_ot_and_claims_review(sandbox, monkeypatch, store):
+    client = _app(monkeypatch)
+    child_id, _ = _add_child(client)
+    sid = _upload(client, child_id)
+    _link(client, child_id)
+    r = client.get(f"/api/ot/video/{sid}", headers=OT)
+    assert r.status_code == 200
+    assert r.content == b"VIDEO-BYTES" + b"x" * 100
+    assert r.headers["content-disposition"] == "inline"
+    # Opening the clip claims it for review.
+    assert store.read_submission(sid)["state"] == "in_review"
+
+
+def test_ot_video_forbidden_without_care_link(sandbox, monkeypatch):
+    client = _app(monkeypatch)
+    child_id, _ = _add_child(client)
+    sid = _upload(client, child_id)
+    _link(client, child_id, actor="ot_a")
+    # ot_b has no link → 403, even though the clip exists.
+    assert client.get(f"/api/ot/video/{sid}", headers=OT2).status_code == 403
+
+
 # ---------- no-retention: video purged, observation kept ----------
 
 def test_after_annotate_video_purged_observation_kept(sandbox, monkeypatch, store):
