@@ -39,4 +39,35 @@ describe("AuthScreen (login)", () => {
     await u.click(screen.getByRole("button", { name: t("auth.signIn") }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(t("auth.error.invalid")));
   });
+
+  it("parent self-registration signs the parent in", async () => {
+    const u = userEvent.setup();
+    const register = vi.fn(async () => ({ user, pending: false }));
+    const onAuthed = vi.fn();
+    const a = { me: vi.fn(async () => null), login: vi.fn(), register, logout: vi.fn() } as unknown as AuthApi;
+    render(<AuthScreen lang="en" setLang={() => {}} onAuthed={onAuthed} api={a} />);
+    await u.click(screen.getByRole("button", { name: t("auth.createAccount") }));
+    await u.type(screen.getByLabelText(t("auth.name")), "Mum");
+    await u.type(screen.getByLabelText(t("auth.email")), "mum@x.com");
+    await u.type(screen.getByLabelText(t("auth.password")), "password123");
+    await u.click(screen.getByRole("button", { name: t("auth.register.submitParent") }));
+    expect(register).toHaveBeenCalledWith({ email: "mum@x.com", password: "password123", name: "Mum", role: "parent", hcpc: undefined });
+    await waitFor(() => expect(onAuthed).toHaveBeenCalledWith(user));
+  });
+
+  it("therapist request shows the pending message and does not sign in", async () => {
+    const u = userEvent.setup();
+    const register = vi.fn(async () => ({ user, pending: true }));
+    const onAuthed = vi.fn();
+    const a = { me: vi.fn(async () => null), login: vi.fn(), register, logout: vi.fn() } as unknown as AuthApi;
+    render(<AuthScreen lang="en" setLang={() => {}} onAuthed={onAuthed} api={a} />);
+    await u.click(screen.getByRole("button", { name: t("auth.createAccount") }));
+    await u.click(screen.getByText(t("auth.register.iAmOt")));
+    await u.type(screen.getByLabelText(t("auth.name")), "Maya");
+    await u.type(screen.getByLabelText(t("auth.email")), "maya@clinic.org");
+    await u.type(screen.getByLabelText(t("auth.password")), "password123");
+    await u.click(screen.getByRole("button", { name: t("auth.register.submitOt") }));
+    await waitFor(() => expect(screen.getByText(t("auth.register.otPending"))).toBeInTheDocument());
+    expect(onAuthed).not.toHaveBeenCalled();
+  });
 });
